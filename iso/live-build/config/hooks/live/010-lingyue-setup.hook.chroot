@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+rm -f /etc/nginx/sites-enabled/default
+ln -sf /etc/nginx/sites-available/lingyue.conf /etc/nginx/sites-enabled/lingyue.conf
+
+chmod +x /usr/local/sbin/lingyue-console-ready
+
+systemctl enable nginx.service
+systemctl enable lingyue-console.service
+systemctl enable NetworkManager.service
+systemctl enable ssh.service

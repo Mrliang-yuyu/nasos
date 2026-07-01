@@ -1,0 +1,17 @@
+linux-image-amd64
+live-boot
+live-config
+systemd
+network-manager
+openssh-server
+nginx-light
+curl
+smartmontools
+samba
+nfs-kernel-server
+avahi-daemon
+btrfs-progs
+docker.io
+docker-compose
+sudo
+vim-tiny

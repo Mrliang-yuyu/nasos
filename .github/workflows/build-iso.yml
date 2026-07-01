@@ -1,0 +1,50 @@
+name: Build Lingyue OS ISO
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - index.html
+      - styles.css
+      - console.html
+      - console.css
+      - iso/**
+      - .github/workflows/build-iso.yml
+
+jobs:
+  build:
+    name: Build amd64 live ISO
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install live-build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            live-build \
+            xorriso \
+            isolinux \
+            syslinux-common \
+            squashfs-tools \
+            rsync
+
+      - name: Build ISO
+        run: sudo ./iso/build-iso.sh
+
+      - name: Restore artifact permissions
+        run: sudo chown -R "$USER:$USER" dist
+
+      - name: Upload ISO artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: lingyue-os-alpha-iso
+          path: |
+            dist/lyos-v0.1-alpha.iso
+            dist/lyos-v0.1-alpha.iso.sha256
+          if-no-files-found: error

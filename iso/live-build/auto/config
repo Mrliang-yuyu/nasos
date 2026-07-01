@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+lb config noauto \
+  --distribution bookworm \
+  --archive-areas "main contrib non-free-firmware" \
+  --binary-images iso-hybrid \
+  --bootappend-live "boot=live components quiet splash hostname=lingyue-os username=lingyue" \
+  --iso-application "Lingyue OS Alpha" \
+  --iso-publisher "Lingyue OS" \
+  --iso-volume "LINGYUE_OS_ALPHA" \
+  --memtest none \
+  "${@}"

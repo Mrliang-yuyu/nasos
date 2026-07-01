@@ -1,0 +1,12 @@
+[Unit]
+Description=Lingyue OS Web Console
+After=network-online.target nginx.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/lingyue-console-ready
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

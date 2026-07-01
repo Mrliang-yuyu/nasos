@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+IP_ADDRESS="$(hostname -I | awk '{print $1}')"
+if [[ -z "${IP_ADDRESS:-}" ]]; then
+  IP_ADDRESS="127.0.0.1"
+fi
+
+cat >/etc/issue <<MSG
+Lingyue OS Alpha
+
+Web console: http://$IP_ADDRESS/
+Local console preview: /opt/lingyue/www/console.html
+
+MSG
+
+echo "Lingyue OS Web console is available at http://$IP_ADDRESS/"
