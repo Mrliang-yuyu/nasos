@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>凌岳OS - NAS 操作系统</title>
+  <meta name="description" content="凌岳OS 是一套面向家庭、极客与小团队的可视化 NAS 操作系统，首版以 ISO 方式交付。" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="#top" aria-label="凌岳OS 首页">
+      <span class="brand-mark">凌</span>
+      <span class="brand-text">
+        <strong>凌岳OS</strong>
+        <small>NAS Operating System</small>
+      </span>
+    </a>
+
+    <nav class="site-nav" aria-label="页面导航">
+      <a href="#experience">体验</a>
+      <a href="#features">能力</a>
+      <a href="#download">下载</a>
+      <a href="#install">安装</a>
+    </nav>
+  </header>
+
+  <main id="top">
+    <section class="hero-section">
+      <div class="hero-content">
+        <div class="release-badge">
+          <span>v0.1 Alpha</span>
+          <span>ISO 首发版</span>
+        </div>
+
+        <h1>为私有数据中心而生的 NAS 操作系统</h1>
+        <p class="hero-lead">
+          凌岳OS 将存储管理、共享权限、应用中心与远程管理统一到一套清晰的可视化界面中，
+          让普通硬件也能成为稳定、易用、可持续扩展的家庭与团队数据中心。
+        </p>
+
+        <div class="hero-actions">
+          <a class="button primary" href="#download">下载 ISO 镜像</a>
+          <a class="button ghost" href="console.html">查看控制台原型</a>
+        </div>
+
+        <div class="hero-stats" aria-label="系统摘要">
+          <div>
+            <strong>x86_64</strong>
+            <span>首版平台</span>
+          </div>
+          <div>
+            <strong>Web UI</strong>
+            <span>可视化控制台</span>
+          </div>
+          <div>
+            <strong>Btrfs</strong>
+            <span>默认存储方案</span>
+          </div>
+          <div>
+            <strong>Docker</strong>
+            <span>应用中心底座</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="product-preview" id="experience" aria-label="凌岳OS 管理台预览">
+        <div class="preview-window">
+          <div class="window-bar">
+            <span></span>
+            <span></span>
+            <span></span>
+          </div>
+
+          <div class="console-layout">
+            <aside class="console-sidebar">
+              <div class="sidebar-title">凌岳OS</div>
+              <span class="active">仪表盘</span>
+              <span>存储</span>
+              <span>共享</span>
+              <span>应用中心</span>
+              <span>远程与安全</span>
+            </aside>
+
+            <section class="console-main">
+              <div class="console-topline">
+                <div>
+                  <p>系统状态</p>
+                  <h2>运行正常</h2>
+                </div>
+                <span class="status-ok">健康</span>
+              </div>
+
+              <div class="metric-grid">
+                <div class="metric-card large">
+                  <span>存储容量</span>
+                  <strong>18.4 TB</strong>
+                  <div class="capacity-bar"><i></i></div>
+                </div>
+                <div class="metric-card">
+                  <span>磁盘健康</span>
+                  <strong>4 / 4</strong>
+                </div>
+                <div class="metric-card">
+                  <span>共享服务</span>
+                  <strong>SMB</strong>
+                </div>
+              </div>
+
+              <div class="task-panel">
+                <div>
+                  <span>最近任务</span>
+                  <strong>快照计划已完成</strong>
+                </div>
+                <div>
+                  <span>应用状态</span>
+                  <strong>6 个应用运行中</strong>
+                </div>
+              </div>
+            </section>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="feature-band" id="features" aria-label="核心能力">
+      <article>
+        <span>01</span>
+        <h3>可视化初始化</h3>
+        <p>首次开机通过向导完成账号、网络、磁盘扫描与初始化建议。</p>
+      </article>
+      <article>
+        <span>02</span>
+        <h3>存储与快照</h3>
+        <p>磁盘、存储池、文件系统、快照和健康检查集中管理。</p>
+      </article>
+      <article>
+        <span>03</span>
+        <h3>共享与权限</h3>
+        <p>SMB、NFS、WebDAV 与用户权限通过图形界面配置。</p>
+      </article>
+      <article>
+        <span>04</span>
+        <h3>应用中心</h3>
+        <p>基于 Docker 的应用安装、运行、更新和卸载体验。</p>
+      </article>
+    </section>
+
+    <section class="download-section" id="download">
+      <div class="download-copy">
+        <p class="section-kicker">ISO Download</p>
+        <h2>首版镜像面向真实安装流程设计</h2>
+        <p>
+          当前版本用于验证首装、存储、共享和应用中心的核心闭环。你可以在实体机或虚拟机中体验凌岳OS 的初始系统流程。
+        </p>
+      </div>
+
+      <div class="download-panel">
+        <div class="file-row">
+          <div>
+            <span>镜像文件</span>
+            <strong>lyos-v0.1-alpha.iso</strong>
+          </div>
+          <a class="button primary compact" href="#">下载</a>
+        </div>
+        <dl class="file-meta">
+          <div><dt>架构</dt><dd>x86_64</dd></div>
+          <div><dt>大小</dt><dd>约 2.1 GB</dd></div>
+          <div><dt>校验</dt><dd>SHA256 待发布</dd></div>
+        </dl>
+      </div>
+    </section>
+
+    <section class="install-section" id="install">
+      <div class="section-heading">
+        <p class="section-kicker">Installation</p>
+        <h2>三步开始体验</h2>
+      </div>
+
+      <div class="install-steps">
+        <article>
+          <span>01</span>
+          <h3>写入镜像</h3>
+          <p>将 ISO 写入 U 盘，或挂载到虚拟机启动盘。</p>
+        </article>
+        <article>
+          <span>02</span>
+          <h3>完成初始化</h3>
+          <p>按向导设置账号、网络、磁盘和存储建议。</p>
+        </article>
+        <article>
+          <span>03</span>
+          <h3>进入管理台</h3>
+          <p>通过浏览器访问 Web 控制台，查看系统状态。</p>
+        </article>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>凌岳OS 控制台原型</title>
+  <meta name="description" content="凌岳OS Web 管理台完整原型。" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="console.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="凌岳OS 主导航">
+      <a class="brand" href="index.html" aria-label="返回凌岳OS 官网">
+        <span class="brand-mark">凌</span>
+        <span>
+          <strong>凌岳OS</strong>
+          <small>控制台原型</small>
+        </span>
+      </a>
+
+      <nav class="nav-list">
+        <a class="active" href="#dashboard">仪表盘</a>
+        <a href="#storage">存储</a>
+        <a href="#shares">共享</a>
+        <a href="#apps">应用中心</a>
+        <a href="#backup">备份同步</a>
+        <a href="#security">远程与安全</a>
+        <a href="#logs">日志告警</a>
+      </nav>
+
+      <div class="sidebar-status">
+        <span>系统健康</span>
+        <strong>运行正常</strong>
+      </div>
+    </aside>
+
+    <main class="workspace">
+      <header class="topbar">
+        <div>
+          <p>设备</p>
+          <h1>LY-NAS-01</h1>
+        </div>
+        <div class="topbar-actions">
+          <button type="button">通知</button>
+          <button type="button">任务</button>
+          <button type="button" class="avatar">Admin</button>
+        </div>
+      </header>
+
+      <section class="hero-status" id="dashboard">
+        <div>
+          <span class="kicker">System Overview</span>
+          <h2>你的私有数据中心运行稳定</h2>
+          <p>4 块磁盘在线，SMB 服务可用，应用中心有 6 个应用正在运行。系统已完成最近一次快照计划。</p>
+        </div>
+        <button type="button">运行健康检查</button>
+      </section>
+
+      <section class="status-grid" aria-label="系统状态卡片">
+        <article class="status-card primary-card">
+          <div class="card-head">
+            <span>存储容量</span>
+            <strong>18.4 TB</strong>
+          </div>
+          <div class="usage-line"><i></i></div>
+          <footer>
+            <span>已用 9.2 TB</span>
+            <span>剩余 9.2 TB</span>
+          </footer>
+        </article>
+
+        <article class="status-card">
+          <span>磁盘健康</span>
+          <strong>4 / 4</strong>
+          <small>全部在线</small>
+        </article>
+
+        <article class="status-card">
+          <span>网络</span>
+          <strong>2.5 GbE</strong>
+          <small>192.168.10.24</small>
+        </article>
+
+        <article class="status-card">
+          <span>服务</span>
+          <strong>SMB</strong>
+          <small>NFS / WebDAV 待启用</small>
+        </article>
+      </section>
+
+      <section class="module-section" id="storage">
+        <div class="section-title">
+          <div>
+            <span class="kicker">Storage</span>
+            <h2>存储管理</h2>
+          </div>
+          <div class="section-actions">
+            <button type="button">创建存储池</button>
+            <button type="button">健康检查</button>
+          </div>
+        </div>
+
+        <div class="storage-layout">
+          <article class="panel large-panel">
+            <div class="panel-head compact-head">
+              <h3>磁盘列表</h3>
+              <span class="badge ok-badge">全部健康</span>
+            </div>
+            <div class="disk-grid">
+              <div class="disk-card"><span>Disk 1</span><strong>8 TB</strong><small>35 C · SATA</small></div>
+              <div class="disk-card"><span>Disk 2</span><strong>8 TB</strong><small>34 C · SATA</small></div>
+              <div class="disk-card"><span>Disk 3</span><strong>8 TB</strong><small>36 C · SATA</small></div>
+              <div class="disk-card"><span>Disk 4</span><strong>8 TB</strong><small>35 C · SATA</small></div>
+            </div>
+          </article>
+
+          <article class="panel">
+            <div class="panel-head compact-head">
+              <h3>存储池</h3>
+            </div>
+            <div class="table-list">
+              <div class="table-row header"><span>名称</span><span>模式</span><span>容量</span><span>状态</span></div>
+              <div class="table-row"><span>MainPool</span><span>Btrfs Mirror</span><span>18.4 TB</span><span class="ok">健康</span></div>
+              <div class="table-row"><span>AppData</span><span>Btrfs Single</span><span>1.8 TB</span><span class="ok">健康</span></div>
+            </div>
+          </article>
+
+          <article class="panel">
+            <div class="panel-head compact-head">
+              <h3>快照计划</h3>
+            </div>
+            <div class="snapshot-list">
+              <div><strong>每日快照</strong><span>保留 14 天 · 02:00 执行</span></div>
+              <div><strong>应用数据</strong><span>保留 7 天 · 安装前自动创建</span></div>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="module-section" id="shares">
+        <div class="section-title">
+          <div>
+            <span class="kicker">Shares</span>
+            <h2>共享与权限</h2>
+          </div>
+          <div class="section-actions">
+            <button type="button">新建共享</button>
+            <button type="button">管理用户</button>
+          </div>
+        </div>
+
+        <div class="two-column">
+          <article class="panel">
+            <div class="panel-head compact-head"><h3>共享文件夹</h3></div>
+            <div class="share-list">
+              <div><strong>家庭照片</strong><span>SMB · 读写 · 6 位用户</span></div>
+              <div><strong>工作资料</strong><span>SMB · 只读成员组</span></div>
+              <div><strong>媒体库</strong><span>SMB · 应用可访问</span></div>
+            </div>
+          </article>
+
+          <article class="panel">
+            <div class="panel-head compact-head"><h3>协议状态</h3></div>
+            <div class="protocol-list">
+              <div><span>SMB</span><strong class="ok">已启用</strong></div>
+              <div><span>NFS</span><strong>未启用</strong></div>
+              <div><span>WebDAV</span><strong>未启用</strong></div>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="module-section" id="apps">
+        <div class="section-title">
+          <div>
+            <span class="kicker">Applications</span>
+            <h2>应用中心</h2>
+          </div>
+          <div class="section-actions">
+            <button type="button">同步应用库</button>
+            <button type="button">安装应用</button>
+          </div>
+        </div>
+
+        <div class="app-store-grid">
+          <article class="app-card"><span>Photo</span><strong>凌岳相册</strong><small>运行中 · 420 MB</small></article>
+          <article class="app-card"><span>Media</span><strong>影音库</strong><small>运行中 · 1.2 GB</small></article>
+          <article class="app-card"><span>Download</span><strong>下载器</strong><small>已停止</small></article>
+          <article class="app-card"><span>Sync</span><strong>同步服务</strong><small>运行中 · 180 MB</small></article>
+        </div>
+      </section>
+
+      <section class="module-section" id="backup">
+        <div class="section-title">
+          <div>
+            <span class="kicker">Backup</span>
+            <h2>备份与同步</h2>
+          </div>
+          <div class="section-actions">
+            <button type="button">新建任务</button>
+            <button type="button">恢复向导</button>
+          </div>
+        </div>
+
+        <div class="two-column">
+          <article class="panel">
+            <div class="panel-head compact-head"><h3>备份任务</h3></div>
+            <div class="task-list">
+              <div><strong>照片备份</strong><span>每日 01:00 · 最近成功</span></div>
+              <div><strong>工作资料同步</strong><span>每 6 小时 · 下次 18:00</span></div>
+              <div><strong>应用数据备份</strong><span>安装更新前自动执行</span></div>
+            </div>
+          </article>
+
+          <article class="panel">
+            <div class="panel-head compact-head"><h3>恢复点</h3></div>
+            <div class="restore-panel">
+              <strong>最近恢复点</strong>
+              <span>2026-07-01 02:00</span>
+              <button type="button">查看恢复选项</button>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="module-section" id="security">
+        <div class="section-title">
+          <div>
+            <span class="kicker">Security</span>
+            <h2>远程与安全</h2>
+          </div>
+          <div class="section-actions">
+            <button type="button">启用远程访问</button>
+            <button type="button">证书管理</button>
+          </div>
+        </div>
+
+        <div class="security-grid">
+          <article class="panel"><h3>外网访问</h3><p>当前关闭。启用后需要完成 TLS 和登录安全检查。</p></article>
+          <article class="panel"><h3>TLS 证书</h3><p>本地管理台已使用自签证书，公网证书待配置。</p></article>
+          <article class="panel"><h3>登录设备</h3><p>当前 2 台设备在线，最近登录来自局域网。</p></article>
+        </div>
+      </section>
+
+      <section class="module-section" id="logs">
+        <div class="section-title">
+          <div>
+            <span class="kicker">Events</span>
+            <h2>日志与告警</h2>
+          </div>
+          <div class="section-actions">
+            <button type="button">导出日志</button>
+            <button type="button">全部已读</button>
+          </div>
+        </div>
+
+        <article class="panel">
+          <ol class="event-list wide-events">
+            <li><span>10:24</span> 快照计划执行完成 <strong>信息</strong></li>
+            <li><span>09:41</span> SMB 服务启动成功 <strong>信息</strong></li>
+            <li><span>08:15</span> 应用中心同步完成 <strong>信息</strong></li>
+            <li><span>昨日</span> 磁盘健康检查完成 <strong>健康</strong></li>
+          </ol>
+        </article>
+      </section>
+    </main>
+  </div>
+</body>
+</html>
