@@ -2,6 +2,8 @@
 set -euo pipefail
 
 lb config noauto \
+  --mode debian \
+  --architectures amd64 \
   --distribution bookworm \
   --archive-areas "main contrib non-free-firmware" \
   --binary-images iso-hybrid \
