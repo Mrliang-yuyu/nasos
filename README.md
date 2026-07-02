@@ -21,6 +21,12 @@ dist/lyos-v0.1-alpha.iso.sha256
 /opt/lingyue/www
 ```
 
+同时会启动本机 API 服务，用于向控制台提供系统状态、磁盘、网络和核心服务信息：
+
+```text
+http://127.0.0.1:8088/api/system/overview
+```
+
 系统启动后可通过浏览器访问设备 IP：
 
 ```text

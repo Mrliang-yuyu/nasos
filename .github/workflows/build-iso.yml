@@ -10,6 +10,8 @@ on:
       - styles.css
       - console.html
       - console.css
+      - console.js
+      - api/**
       - iso/**
       - .github/workflows/build-iso.yml
 

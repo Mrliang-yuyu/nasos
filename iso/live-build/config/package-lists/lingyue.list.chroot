@@ -5,6 +5,7 @@ systemd
 network-manager
 openssh-server
 nginx-light
+python3-minimal
 curl
 smartmontools
 samba

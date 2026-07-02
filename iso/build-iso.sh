@@ -7,7 +7,7 @@ WORK_DIR="$ISO_DIR/work"
 DIST_DIR="$ROOT_DIR/dist"
 IMAGE_NAME="lyos-v0.1-alpha.iso"
 
-required_files=(index.html styles.css console.html console.css)
+required_files=(index.html styles.css console.html console.css console.js api/lingyue_api.py)
 for file in "${required_files[@]}"; do
   if [[ ! -f "$ROOT_DIR/$file" ]]; then
     echo "Missing required web asset: $file" >&2
@@ -21,8 +21,11 @@ mkdir -p "$WORK_DIR" "$DIST_DIR"
 rsync -a "$ISO_DIR/live-build/" "$WORK_DIR/"
 
 mkdir -p "$WORK_DIR/config/includes.chroot/opt/lingyue/www"
-rsync -a "$ROOT_DIR/index.html" "$ROOT_DIR/styles.css" "$ROOT_DIR/console.html" "$ROOT_DIR/console.css" \
+rsync -a "$ROOT_DIR/index.html" "$ROOT_DIR/styles.css" "$ROOT_DIR/console.html" "$ROOT_DIR/console.css" "$ROOT_DIR/console.js" \
   "$WORK_DIR/config/includes.chroot/opt/lingyue/www/"
+
+mkdir -p "$WORK_DIR/config/includes.chroot/opt/lingyue/api"
+rsync -a "$ROOT_DIR/api/lingyue_api.py" "$WORK_DIR/config/includes.chroot/opt/lingyue/api/"
 
 cd "$WORK_DIR"
 lb clean --purge || true

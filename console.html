@@ -33,7 +33,7 @@
 
       <div class="sidebar-status">
         <span>系统健康</span>
-        <strong>运行正常</strong>
+          <strong data-sidebar-health>运行正常</strong>
       </div>
     </aside>
 
@@ -41,7 +41,7 @@
       <header class="topbar">
         <div>
           <p>设备</p>
-          <h1>LY-NAS-01</h1>
+          <h1 data-device-name>LY-NAS-01</h1>
         </div>
         <div class="topbar-actions">
           <button type="button">通知</button>
@@ -53,8 +53,8 @@
       <section class="hero-status" id="dashboard">
         <div>
           <span class="kicker">System Overview</span>
-          <h2>你的私有数据中心运行稳定</h2>
-          <p>4 块磁盘在线，SMB 服务可用，应用中心有 6 个应用正在运行。系统已完成最近一次快照计划。</p>
+          <h2 data-hero-title>你的私有数据中心运行稳定</h2>
+          <p data-hero-copy>4 块磁盘在线，SMB 服务可用，应用中心有 6 个应用正在运行。系统已完成最近一次快照计划。</p>
         </div>
         <button type="button">运行健康检查</button>
       </section>
@@ -63,31 +63,31 @@
         <article class="status-card primary-card">
           <div class="card-head">
             <span>存储容量</span>
-            <strong>18.4 TB</strong>
+            <strong data-storage-total>18.4 TB</strong>
           </div>
-          <div class="usage-line"><i></i></div>
+          <div class="usage-line"><i data-usage-bar></i></div>
           <footer>
-            <span>已用 9.2 TB</span>
-            <span>剩余 9.2 TB</span>
+            <span data-storage-used>已用 9.2 TB</span>
+            <span data-storage-free>剩余 9.2 TB</span>
           </footer>
         </article>
 
         <article class="status-card">
           <span>磁盘健康</span>
-          <strong>4 / 4</strong>
-          <small>全部在线</small>
+          <strong data-disk-health>4 / 4</strong>
+          <small data-disk-health-copy>全部在线</small>
         </article>
 
         <article class="status-card">
           <span>网络</span>
-          <strong>2.5 GbE</strong>
-          <small>192.168.10.24</small>
+          <strong data-network-speed>2.5 GbE</strong>
+          <small data-network-ip>192.168.10.24</small>
         </article>
 
         <article class="status-card">
           <span>服务</span>
-          <strong>SMB</strong>
-          <small>NFS / WebDAV 待启用</small>
+          <strong data-service-main>SMB</strong>
+          <small data-service-copy>NFS / WebDAV 待启用</small>
         </article>
       </section>
 
@@ -109,7 +109,7 @@
               <h3>磁盘列表</h3>
               <span class="badge ok-badge">全部健康</span>
             </div>
-            <div class="disk-grid">
+            <div class="disk-grid" data-disk-grid>
               <div class="disk-card"><span>Disk 1</span><strong>8 TB</strong><small>35 C · SATA</small></div>
               <div class="disk-card"><span>Disk 2</span><strong>8 TB</strong><small>34 C · SATA</small></div>
               <div class="disk-card"><span>Disk 3</span><strong>8 TB</strong><small>36 C · SATA</small></div>
@@ -164,7 +164,7 @@
 
           <article class="panel">
             <div class="panel-head compact-head"><h3>协议状态</h3></div>
-            <div class="protocol-list">
+            <div class="protocol-list" data-protocol-list>
               <div><span>SMB</span><strong class="ok">已启用</strong></div>
               <div><span>NFS</span><strong>未启用</strong></div>
               <div><span>WebDAV</span><strong>未启用</strong></div>
@@ -268,5 +268,6 @@
       </section>
     </main>
   </div>
+  <script src="console.js"></script>
 </body>
 </html>

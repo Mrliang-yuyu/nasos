@@ -1,0 +1,12 @@
+[Unit]
+Description=Lingyue OS Local API
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /opt/lingyue/api/lingyue_api.py
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

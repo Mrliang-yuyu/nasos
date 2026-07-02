@@ -5,8 +5,10 @@ rm -f /etc/nginx/sites-enabled/default
 ln -sf /etc/nginx/sites-available/lingyue.conf /etc/nginx/sites-enabled/lingyue.conf
 
 chmod +x /usr/local/sbin/lingyue-console-ready
+chmod +x /opt/lingyue/api/lingyue_api.py
 
 systemctl enable nginx.service
+systemctl enable lingyue-api.service
 systemctl enable lingyue-console.service
 systemctl enable NetworkManager.service
 systemctl enable ssh.service

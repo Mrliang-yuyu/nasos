@@ -419,6 +419,10 @@ button {
   font-weight: 800;
 }
 
+.muted-status {
+  color: var(--faint);
+}
+
 .share-list div,
 .app-grid span {
   padding: 16px;
