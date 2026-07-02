@@ -110,6 +110,7 @@ function renderInstallOverview(data) {
   text("[data-install-status]", data.ready_label || "等待扫描");
   text("[data-install-targets]", `${data.candidate_count || 0} 块`);
   text("[data-install-minimum]", data.minimum_size_label || "16 GB");
+  text("[data-install-mode]", data.execution_enabled ? "可执行" : "安全模式");
 
   const target = document.querySelector("[data-install-target]");
   if (target) {
@@ -124,6 +125,14 @@ function renderInstallOverview(data) {
   const planSteps = data.latest_plan?.steps || ["扫描空闲磁盘", "生成安装计划", "等待执行安装器"];
   if (steps) {
     steps.innerHTML = planSteps.map((step, index) => `<li><span>${index + 1}</span>${escapeHtml(step)}</li>`).join("");
+  }
+
+  const events = document.querySelector("[data-install-events]");
+  if (events) {
+    const items = (data.events || []).slice(-5).reverse();
+    events.innerHTML = items.length
+      ? items.map((item) => `<li><span>${escapeHtml(item.level)}</span>${escapeHtml(item.message)}</li>`).join("")
+      : '<li><span>idle</span>等待安装计划</li>';
   }
 }
 
@@ -436,9 +445,30 @@ async function createInstallPlan() {
   }
 }
 
+async function executeInstallPlan() {
+  try {
+    const response = await fetch("/api/install/execute", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ confirm: "INSTALL-LINGYUE" }),
+    });
+    const result = await response.json();
+    if (!response.ok || !result.ok) {
+      const firstError = result.errors ? Object.values(result.errors)[0] : result.error;
+      throw new Error(firstError || "安装执行失败。");
+    }
+
+    showActionNote("[data-install-action-note]", result.run.message || result.run.status_label, result.run.status !== "completed");
+    await loadInstallOverview();
+  } catch (error) {
+    showActionNote("[data-install-action-note]", error.message, true);
+  }
+}
+
 function bindInstallActions() {
   document.querySelector("[data-refresh-install]")?.addEventListener("click", loadInstallOverview);
   document.querySelector("[data-create-install-plan]")?.addEventListener("click", createInstallPlan);
+  document.querySelector("[data-execute-install]")?.addEventListener("click", executeInstallPlan);
 }
 
 async function createPublicShare() {

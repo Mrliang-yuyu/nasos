@@ -6,6 +6,7 @@ ln -sf /etc/nginx/sites-available/lingyue.conf /etc/nginx/sites-enabled/lingyue.
 
 chmod +x /usr/local/sbin/lingyue-console-ready
 chmod +x /opt/lingyue/api/lingyue_api.py
+chmod +x /usr/local/sbin/lingyue-install-disk
 
 mkdir -p /etc/samba/smb.conf.d /srv/lingyue/shares /var/lib/lingyue
 chmod 0755 /srv/lingyue /srv/lingyue/shares /var/lib/lingyue

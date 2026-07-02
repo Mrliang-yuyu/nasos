@@ -805,6 +805,33 @@ input[type="checkbox"] {
   font-weight: 900;
 }
 
+.install-log-panel {
+  min-height: 160px;
+  margin-top: 14px;
+}
+
+.install-events {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.install-events li {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+}
+
+.install-events span {
+  color: var(--accent);
+  font-weight: 900;
+}
+
 .restore-panel {
   display: grid;
   gap: 12px;

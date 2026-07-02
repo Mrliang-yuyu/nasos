@@ -24,6 +24,8 @@ CONFIG_DIR = Path(os.environ.get("LINGYUE_CONFIG_DIR") or (Path(STATIC_DIR) / ".
 SETUP_FILE = CONFIG_DIR / "setup.json"
 STORAGE_FILE = CONFIG_DIR / "storage.json"
 INSTALL_FILE = CONFIG_DIR / "install.json"
+INSTALL_SCRIPT = Path(os.environ.get("LINGYUE_INSTALL_SCRIPT", "/usr/local/sbin/lingyue-install-disk"))
+INSTALL_EXECUTION_ENABLED = os.environ.get("LINGYUE_INSTALL_EXECUTE") == "1"
 SHARE_ROOT = Path(os.environ.get("LINGYUE_SHARE_ROOT") or (CONFIG_DIR / "shares" if STATIC_DIR else "/srv/lingyue/shares"))
 SAMBA_MAIN = Path(os.environ.get("LINGYUE_SAMBA_MAIN") or (CONFIG_DIR / "samba/smb.conf" if STATIC_DIR else "/etc/samba/smb.conf"))
 SAMBA_SNIPPET = Path(os.environ.get("LINGYUE_SAMBA_SNIPPET") or (CONFIG_DIR / "samba/lingyue-shares.conf" if STATIC_DIR else "/etc/samba/smb.conf.d/lingyue-shares.conf"))
@@ -92,7 +94,11 @@ def load_install_state():
     except (OSError, json.JSONDecodeError):
         data = {}
 
-    return {"plans": data.get("plans") if isinstance(data.get("plans"), list) else []}
+    return {
+        "plans": data.get("plans") if isinstance(data.get("plans"), list) else [],
+        "events": data.get("events") if isinstance(data.get("events"), list) else [],
+        "runs": data.get("runs") if isinstance(data.get("runs"), list) else [],
+    }
 
 
 def save_install_state(data):
@@ -102,6 +108,12 @@ def save_install_state(data):
         os.chmod(INSTALL_FILE, 0o600)
     except OSError:
         pass
+
+
+def append_install_event(state, level, message):
+    events = state.get("events") if isinstance(state.get("events"), list) else []
+    events.append({"at": utc_now(), "level": level, "message": message})
+    state["events"] = events[-20:]
 
 
 def share_name_to_slug(name):
@@ -691,7 +703,8 @@ def installer_target_candidates():
 
 def install_overview():
     candidates = installer_target_candidates()
-    plans = load_install_state()["plans"]
+    state = load_install_state()
+    plans = state["plans"]
     latest_plan = plans[-1] if plans else None
     ready = bool(candidates)
 
@@ -704,9 +717,13 @@ def install_overview():
         "minimum_size_label": "16 GB",
         "targets": candidates,
         "latest_plan": latest_plan,
+        "events": state["events"],
+        "runs": state["runs"],
+        "execution_enabled": INSTALL_EXECUTION_ENABLED,
+        "installer_available": INSTALL_SCRIPT.exists(),
         "warnings": [
-            "当前版本仅生成安装计划，不会写入、格式化或分区磁盘。",
-            "真正执行安装前会加入二次确认、日志和恢复入口。",
+            "默认安全模式不会写入、格式化或分区磁盘。",
+            "只有显式启用安装执行开关后，安装脚本才会进入真实执行路径。",
         ],
     }
 
@@ -737,8 +754,48 @@ def create_install_plan(payload):
     }
     state = load_install_state()
     state["plans"] = [plan]
+    append_install_event(state, "info", f"已生成安装计划，目标 {selected['path']}。")
     save_install_state(state)
     return plan, None
+
+
+def execute_install_plan(payload):
+    confirm = str(payload.get("confirm") or "").strip()
+    state = load_install_state()
+    plan = state["plans"][-1] if state["plans"] else None
+
+    if not plan:
+        return None, {"plan": "请先生成安装计划。"}
+    if confirm != "INSTALL-LINGYUE":
+        return None, {"confirm": "请输入确认短语 INSTALL-LINGYUE。"}
+    if not INSTALL_SCRIPT.exists():
+        return None, {"script": "安装脚本入口不存在。"}
+
+    run = {
+        "id": f"run-{int(time.time())}",
+        "plan_id": plan["id"],
+        "target": plan["target"],
+        "started_at": utc_now(),
+        "status": "blocked",
+        "status_label": "安全模式已阻止",
+    }
+
+    if not INSTALL_EXECUTION_ENABLED:
+        append_install_event(state, "warn", "安装执行被安全模式阻止，未写入磁盘。")
+        state["runs"] = [run]
+        save_install_state(state)
+        return {**run, "message": "安全模式已阻止执行。设置 LINGYUE_INSTALL_EXECUTE=1 后才允许脚本进入真实执行路径。"}, None
+
+    code, output, error = run_command_result([str(INSTALL_SCRIPT), "--target", plan["target"], "--plan", plan["id"]])
+    run["status"] = "completed" if code == 0 else "failed"
+    run["status_label"] = "执行完成" if code == 0 else "执行失败"
+    run["finished_at"] = utc_now()
+    run["output"] = output[-2000:]
+    run["error"] = error[-2000:]
+    append_install_event(state, "info" if code == 0 else "error", run["status_label"])
+    state["runs"] = [run]
+    save_install_state(state)
+    return run, None
 
 
 def network_info():
@@ -867,7 +924,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         parsed = urlparse(self.path)
-        if parsed.path not in {"/api/setup/complete", "/api/storage/pools/plan", "/api/install/plan", "/api/shares/create"}:
+        if parsed.path not in {"/api/setup/complete", "/api/storage/pools/plan", "/api/install/plan", "/api/install/execute", "/api/shares/create"}:
             self.send_response(404)
             self.end_headers()
             return
@@ -904,6 +961,15 @@ class Handler(BaseHTTPRequestHandler):
                 return
 
             self.send_json({"ok": True, "plan": plan})
+            return
+
+        if parsed.path == "/api/install/execute":
+            run, errors = execute_install_plan(payload)
+            if errors:
+                self.send_json({"ok": False, "errors": errors}, status=400)
+                return
+
+            self.send_json({"ok": True, "run": run})
             return
 
         share, errors = create_share(payload)

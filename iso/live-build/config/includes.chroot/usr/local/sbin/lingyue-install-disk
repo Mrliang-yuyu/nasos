@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+target=""
+plan=""
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --target)
+      target="${2:-}"
+      shift 2
+      ;;
+    --plan)
+      plan="${2:-}"
+      shift 2
+      ;;
+    *)
+      echo "Unknown argument: $1" >&2
+      exit 2
+      ;;
+  esac
+done
+
+if [[ -z "$target" || -z "$plan" ]]; then
+  echo "Usage: lingyue-install-disk --target /dev/sdX --plan install-id" >&2
+  exit 2
+fi
+
+cat <<MSG
+Lingyue OS installer scaffold
+Plan: $plan
+Target: $target
+
+The destructive installer is not implemented in this alpha build.
+No partition table, filesystem, bootloader, or system files were written.
+MSG

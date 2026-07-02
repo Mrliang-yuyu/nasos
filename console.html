@@ -292,6 +292,7 @@
             <h2>系统安装</h2>
           </div>
           <div class="section-actions">
+            <button type="button" data-execute-install>执行安装检查</button>
             <button type="button" data-create-install-plan>生成安装计划</button>
             <button type="button" data-refresh-install>重新预检</button>
           </div>
@@ -301,7 +302,7 @@
           <div><span>安装状态</span><strong data-install-status>等待扫描</strong></div>
           <div><span>可安装磁盘</span><strong data-install-targets>0 块</strong></div>
           <div><span>最低容量</span><strong data-install-minimum>16 GB</strong></div>
-          <div><span>执行模式</span><strong>仅计划</strong></div>
+          <div><span>执行模式</span><strong data-install-mode>安全模式</strong></div>
         </div>
 
         <p class="action-note" data-install-action-note hidden></p>
@@ -327,6 +328,13 @@
             </ol>
           </article>
         </div>
+
+        <article class="panel install-log-panel">
+          <div class="panel-head compact-head"><h3>安装事件</h3></div>
+          <ol class="install-events" data-install-events>
+            <li><span>idle</span>等待安装计划</li>
+          </ol>
+        </article>
       </section>
 
       <section class="module-section" id="backup">
