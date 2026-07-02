@@ -13,6 +13,9 @@ on:
       - iso/**
       - .github/workflows/build-iso.yml
 
+permissions:
+  contents: write
+
 jobs:
   build:
     name: Build amd64 live ISO
@@ -37,3 +40,17 @@ jobs:
             dist/lyos-v0.1-alpha.iso
             dist/lyos-v0.1-alpha.iso.sha256
           if-no-files-found: error
+
+      - name: Publish alpha release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view v0.1-alpha >/dev/null 2>&1 || \
+            gh release create v0.1-alpha \
+              --title "凌岳OS v0.1 Alpha" \
+              --notes "凌岳OS 首版 Alpha ISO。当前版本用于验证启动、Web 控制台预览与 NAS 基础服务打包流程。"
+
+          gh release upload v0.1-alpha \
+            dist/lyos-v0.1-alpha.iso \
+            dist/lyos-v0.1-alpha.iso.sha256 \
+            --clobber
