@@ -6,6 +6,7 @@ const stateText = {
 let setupStep = 0;
 let latestOverview = null;
 let latestStorage = null;
+let latestShares = null;
 
 function text(selector, value) {
   const node = document.querySelector(selector);
@@ -115,6 +116,29 @@ function renderServices(services) {
       <strong class="${item.active ? "ok" : "muted-status"}">${item.active ? "已启用" : "未运行"}</strong>
     </div>
   `).join("");
+}
+
+function renderSharesOverview(data) {
+  latestShares = data;
+  const list = document.querySelector("[data-share-list]");
+  if (list) {
+    const shares = data.shares || [];
+    list.innerHTML = shares.map((share) => `
+      <div>
+        <strong>${escapeHtml(share.name)}</strong>
+        <span>${escapeHtml(share.protocol || "SMB")} · ${escapeHtml(share.access_label || "访客读写")} · ${escapeHtml(share.status_label || "待创建")}</span>
+      </div>
+    `).join("") || '<div><strong>Public</strong><span>SMB · 等待创建</span></div>';
+  }
+
+  const protocolList = document.querySelector("[data-protocol-list]");
+  if (protocolList && data.samba) {
+    protocolList.innerHTML = `
+      <div><span>SMB</span><strong class="${data.samba.active ? "ok" : "planned"}">${data.samba.active ? "已运行" : data.samba.installed ? "已安装" : "未安装"}</strong></div>
+      <div><span>NFS</span><strong class="muted-status">待接入</strong></div>
+      <div><span>WebDAV</span><strong class="muted-status">待接入</strong></div>
+    `;
+  }
 }
 
 function renderOverview(data) {
@@ -286,6 +310,17 @@ async function loadStorageOverview() {
   }
 }
 
+async function loadSharesOverview() {
+  try {
+    const response = await fetch("/api/shares/overview", { cache: "no-store" });
+    if (!response.ok) throw new Error(`Shares API returned ${response.status}`);
+    renderSharesOverview(await response.json());
+    showActionNote("[data-share-action-note]", "");
+  } catch (error) {
+    showActionNote("[data-share-action-note]", "当前没有连接共享 API，ISO 环境中会显示真实 SMB 状态。", true);
+  }
+}
+
 async function createPoolPlan() {
   const recommendation = latestStorage?.recommendation;
   if (!recommendation || recommendation.mode === "none") {
@@ -321,10 +356,38 @@ function bindStorageActions() {
   document.querySelector("[data-create-pool]")?.addEventListener("click", createPoolPlan);
 }
 
+async function createPublicShare() {
+  try {
+    const response = await fetch("/api/shares/create", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "Public", access: "guest_rw" }),
+    });
+    const result = await response.json();
+    if (!response.ok || !result.ok) {
+      const firstError = result.errors ? Object.values(result.errors)[0] : result.error;
+      throw new Error(firstError || "共享创建失败。");
+    }
+
+    const warning = result.share?.service_warning ? ` ${result.share.service_warning}` : "";
+    showActionNote("[data-share-action-note]", `Public 共享已创建，路径：${result.share.path}。${warning}`.trim(), Boolean(warning));
+    await loadSharesOverview();
+    await loadOverview();
+  } catch (error) {
+    showActionNote("[data-share-action-note]", error.message, true);
+  }
+}
+
+function bindShareActions() {
+  document.querySelector("[data-create-share]")?.addEventListener("click", createPublicShare);
+}
+
 document.addEventListener("DOMContentLoaded", async () => {
   bindSetupWizard();
   bindStorageActions();
+  bindShareActions();
   await loadOverview();
   await loadStorageOverview();
+  await loadSharesOverview();
   await loadSetupState();
 });

@@ -12,3 +12,4 @@ systemctl enable lingyue-api.service
 systemctl enable lingyue-console.service
 systemctl enable NetworkManager.service
 systemctl enable ssh.service
+systemctl enable smbd.service

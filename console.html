@@ -229,18 +229,18 @@
             <h2>共享与权限</h2>
           </div>
           <div class="section-actions">
-            <button type="button">新建共享</button>
+            <button type="button" data-create-share>新建 Public 共享</button>
             <button type="button">管理用户</button>
           </div>
         </div>
 
+        <p class="action-note" data-share-action-note hidden></p>
+
         <div class="two-column">
           <article class="panel">
             <div class="panel-head compact-head"><h3>共享文件夹</h3></div>
-            <div class="share-list">
-              <div><strong>家庭照片</strong><span>SMB · 读写 · 6 位用户</span></div>
-              <div><strong>工作资料</strong><span>SMB · 只读成员组</span></div>
-              <div><strong>媒体库</strong><span>SMB · 应用可访问</span></div>
+            <div class="share-list" data-share-list>
+              <div><strong>Public</strong><span>SMB · 等待创建</span></div>
             </div>
           </article>
 
