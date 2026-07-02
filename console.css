@@ -47,6 +47,173 @@ button {
   cursor: pointer;
 }
 
+input {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 13px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.055);
+  color: var(--text);
+  font: inherit;
+}
+
+input:focus {
+  outline: 1px solid rgba(207, 198, 255, 0.45);
+}
+
+input[type="radio"],
+input[type="checkbox"] {
+  width: auto;
+  min-height: auto;
+  accent-color: var(--accent-2);
+}
+
+[hidden] {
+  display: none !important;
+}
+
+.setup-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(4, 4, 7, 0.76);
+  backdrop-filter: blur(20px);
+}
+
+.setup-dialog {
+  width: min(820px, 100%);
+  border: 1px solid rgba(207, 198, 255, 0.18);
+  border-radius: 18px;
+  background:
+    linear-gradient(135deg, rgba(207, 198, 255, 0.1), transparent 44%),
+    rgba(15, 15, 23, 0.98);
+  box-shadow: var(--shadow);
+  padding: clamp(22px, 4vw, 34px);
+}
+
+.setup-head h2 {
+  margin: 0 0 10px;
+  font-size: clamp(2rem, 4vw, 3.4rem);
+  line-height: 1;
+  letter-spacing: -0.035em;
+}
+
+.setup-head p,
+.setup-page p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.7;
+}
+
+.setup-steps {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin: 26px 0;
+  padding: 0;
+  list-style: none;
+}
+
+.setup-steps li {
+  min-height: 42px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  color: var(--faint);
+  font-weight: 800;
+}
+
+.setup-steps li.active {
+  background: rgba(207, 198, 255, 0.13);
+  color: var(--text);
+}
+
+.setup-page {
+  display: none;
+  min-height: 250px;
+}
+
+.setup-page.active {
+  display: grid;
+  align-content: start;
+  gap: 16px;
+}
+
+.setup-page label,
+.setup-check {
+  display: grid;
+  gap: 8px;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.setup-options {
+  display: grid;
+  gap: 12px;
+}
+
+.setup-options label,
+.setup-check {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.setup-options strong,
+.setup-options small {
+  display: block;
+}
+
+.setup-options small {
+  margin-top: 4px;
+  color: var(--faint);
+  font-weight: 500;
+}
+
+.setup-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.setup-summary div {
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.setup-summary span,
+.setup-summary strong {
+  display: block;
+}
+
+.setup-summary span {
+  margin-bottom: 8px;
+  color: var(--faint);
+}
+
+.setup-error {
+  margin: 0 0 14px;
+  color: var(--warn);
+  font-weight: 800;
+}
+
+.setup-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
 .app-shell {
   display: grid;
   grid-template-columns: 280px minmax(0, 1fr);
@@ -613,5 +780,10 @@ button {
 
   .wide-events strong {
     text-align: left;
+  }
+
+  .setup-steps,
+  .setup-summary {
+    grid-template-columns: 1fr;
   }
 }

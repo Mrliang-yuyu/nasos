@@ -11,13 +11,85 @@
   <link rel="stylesheet" href="console.css" />
 </head>
 <body>
+  <div class="setup-overlay" data-setup-overlay hidden>
+    <section class="setup-dialog" aria-labelledby="setup-title">
+      <div class="setup-head">
+        <span class="kicker">First Run</span>
+        <h2 id="setup-title">初始化凌岳OS</h2>
+        <p>完成基础设置后，控制台会进入正式管理状态。</p>
+      </div>
+
+      <ol class="setup-steps" aria-label="初始化步骤">
+        <li class="active" data-step-indicator="0">设备</li>
+        <li data-step-indicator="1">管理员</li>
+        <li data-step-indicator="2">网络</li>
+        <li data-step-indicator="3">确认</li>
+      </ol>
+
+      <form class="setup-form" data-setup-form>
+        <section class="setup-page active" data-setup-page="0">
+          <label>
+            <span>设备名称</span>
+            <input name="device_name" value="LY-NAS-01" autocomplete="off" />
+          </label>
+          <p>设备名会显示在控制台、局域网发现和共享服务中。</p>
+        </section>
+
+        <section class="setup-page" data-setup-page="1">
+          <label>
+            <span>管理员账号</span>
+            <input name="admin_username" value="admin" autocomplete="username" />
+          </label>
+          <label>
+            <span>管理员密码</span>
+            <input name="admin_password" type="password" autocomplete="new-password" />
+          </label>
+        </section>
+
+        <section class="setup-page" data-setup-page="2">
+          <div class="setup-options">
+            <label>
+              <input type="radio" name="network_mode" value="dhcp" checked />
+              <span><strong>自动获取 IP</strong><small>适合大多数家庭和办公网络。</small></span>
+            </label>
+            <label>
+              <input type="radio" name="network_mode" value="static" />
+              <span><strong>稍后设置静态 IP</strong><small>完成初始化后在网络页面配置。</small></span>
+            </label>
+          </div>
+          <label class="setup-check">
+            <input type="checkbox" name="enable_smb" checked />
+            <span>初始化后启用 SMB 共享服务</span>
+          </label>
+        </section>
+
+        <section class="setup-page" data-setup-page="3">
+          <div class="setup-summary">
+            <div><span>检测到磁盘</span><strong data-setup-disks>扫描中</strong></div>
+            <div><span>当前 IP</span><strong data-setup-ip>扫描中</strong></div>
+            <div><span>系统状态</span><strong data-setup-health>准备就绪</strong></div>
+          </div>
+          <p>当前版本会保存初始化配置，不会自动格式化磁盘。</p>
+        </section>
+
+        <p class="setup-error" data-setup-error hidden></p>
+
+        <div class="setup-actions">
+          <button type="button" data-setup-prev>上一步</button>
+          <button type="button" class="avatar" data-setup-next>下一步</button>
+          <button type="submit" class="avatar" data-setup-finish hidden>完成初始化</button>
+        </div>
+      </form>
+    </section>
+  </div>
+
   <div class="app-shell">
     <aside class="sidebar" aria-label="凌岳OS 主导航">
       <a class="brand" href="index.html" aria-label="返回凌岳OS 官网">
         <span class="brand-mark">凌</span>
         <span>
           <strong>凌岳OS</strong>
-          <small>控制台原型</small>
+          <small data-console-subtitle>控制台原型</small>
         </span>
       </a>
 
@@ -46,7 +118,7 @@
         <div class="topbar-actions">
           <button type="button">通知</button>
           <button type="button">任务</button>
-          <button type="button" class="avatar">Admin</button>
+          <button type="button" class="avatar" data-admin-name>Admin</button>
         </div>
       </header>
 
