@@ -2,6 +2,7 @@
 import json
 import hashlib
 import os
+import grp
 import re
 import shutil
 import socket
@@ -25,6 +26,7 @@ STORAGE_FILE = CONFIG_DIR / "storage.json"
 SHARE_ROOT = Path(os.environ.get("LINGYUE_SHARE_ROOT") or (CONFIG_DIR / "shares" if STATIC_DIR else "/srv/lingyue/shares"))
 SAMBA_MAIN = Path(os.environ.get("LINGYUE_SAMBA_MAIN") or (CONFIG_DIR / "samba/smb.conf" if STATIC_DIR else "/etc/samba/smb.conf"))
 SAMBA_SNIPPET = Path(os.environ.get("LINGYUE_SAMBA_SNIPPET") or (CONFIG_DIR / "samba/lingyue-shares.conf" if STATIC_DIR else "/etc/samba/smb.conf.d/lingyue-shares.conf"))
+SAMBA_GROUP = os.environ.get("LINGYUE_SAMBA_GROUP", "lingyue-users")
 
 
 def utc_now():
@@ -50,12 +52,12 @@ def run_command(args):
     return result.stdout.strip()
 
 
-def run_command_result(args):
+def run_command_result(args, input_text=None):
     if not shutil.which(args[0]):
         return 127, "", f"{args[0]} not found"
 
     try:
-        result = subprocess.run(args, check=False, capture_output=True, text=True, timeout=5)
+        result = subprocess.run(args, input=input_text, check=False, capture_output=True, text=True, timeout=5)
     except (OSError, subprocess.SubprocessError) as error:
         return 1, "", str(error)
 
@@ -94,8 +96,8 @@ def default_share():
         "name": "Public",
         "path": str(SHARE_ROOT / "public"),
         "protocol": "SMB",
-        "access": "guest_rw",
-        "access_label": "访客读写",
+        "access": "authenticated_rw",
+        "access_label": "认证用户读写",
         "status": "planned",
         "status_label": "待创建",
         "created_at": None,
@@ -119,12 +121,32 @@ def samba_status():
     }
 
 
+def account_status():
+    setup = load_setup()
+    username = setup["admin_username"]
+    linux_user = user_exists(username) if setup["completed"] else False
+    samba_user = samba_user_exists(username) if setup["completed"] else False
+    group_ready = group_exists(SAMBA_GROUP) if setup["completed"] else False
+
+    return {
+        "admin_username": username,
+        "group": SAMBA_GROUP,
+        "completed": setup["completed"],
+        "linux_user": linux_user,
+        "samba_user": samba_user,
+        "group_ready": group_ready,
+        "configured": bool(setup["completed"] and (PREVIEW_MODE or (linux_user and samba_user and group_ready))),
+        "preview": PREVIEW_MODE,
+    }
+
+
 def shares_overview():
     return {
         "generated_at": int(time.time()),
         "root": str(SHARE_ROOT),
         "shares": normalized_shares(),
         "samba": samba_status(),
+        "accounts": account_status(),
     }
 
 
@@ -149,17 +171,32 @@ def write_samba_shares(shares):
     for share in shares:
         if share.get("status") not in {"active", "configured"}:
             continue
+
+        access = share.get("access") or "authenticated_rw"
+        access_lines = [
+            "   guest ok = no",
+            f"   valid users = @{SAMBA_GROUP}",
+            f"   write list = @{SAMBA_GROUP}",
+            "   create mask = 0660",
+            "   directory mask = 0770",
+            f"   force group = {SAMBA_GROUP}",
+        ]
+        if access == "guest_rw":
+            access_lines = [
+                "   guest ok = yes",
+                "   create mask = 0664",
+                "   directory mask = 0775",
+                "   force user = nobody",
+                "   force group = nogroup",
+            ]
+
         blocks.append(
             "\n".join([
                 f"[{share['name']}]",
                 f"   path = {share['path']}",
                 "   browseable = yes",
                 "   read only = no",
-                "   guest ok = yes",
-                "   create mask = 0664",
-                "   directory mask = 0775",
-                "   force user = nobody",
-                "   force group = nogroup",
+                *access_lines,
             ])
         )
 
@@ -180,15 +217,87 @@ def reload_samba():
     return True, None
 
 
+def user_exists(username):
+    code, _, _ = run_command_result(["id", "-u", username])
+    return code == 0
+
+
+def group_exists(group_name):
+    code, _, _ = run_command_result(["getent", "group", group_name])
+    return code == 0
+
+
+def samba_user_exists(username):
+    code, output, _ = run_command_result(["pdbedit", "-L", "-u", username])
+    if code != 0:
+        return False
+    return any(line.split(":", 1)[0] == username for line in output.splitlines())
+
+
+def ensure_samba_account(username, password):
+    if PREVIEW_MODE:
+        return False, "本地预览已记录管理员账号，ISO 环境会创建系统用户和 SMB 密码。"
+
+    if not group_exists(SAMBA_GROUP):
+        code, _, error = run_command_result(["groupadd", "--system", SAMBA_GROUP])
+        if code != 0:
+            return False, error or "共享用户组创建失败。"
+
+    if user_exists(username):
+        code, _, error = run_command_result(["usermod", "-aG", SAMBA_GROUP, username])
+    else:
+        code, _, error = run_command_result(["useradd", "-m", "-s", "/bin/bash", "-G", SAMBA_GROUP, username])
+    if code != 0:
+        return False, error or "管理员系统账号创建失败。"
+
+    code, _, error = run_command_result(["chpasswd"], input_text=f"{username}:{password}\n")
+    if code != 0:
+        return False, error or "管理员系统密码写入失败。"
+
+    smb_password = f"{password}\n{password}\n"
+    code, _, error = run_command_result(["smbpasswd", "-s", "-a", username], input_text=smb_password)
+    if code != 0:
+        return False, error or "SMB 密码写入失败。"
+
+    code, _, error = run_command_result(["smbpasswd", "-e", username])
+    if code not in {0, 127}:
+        return False, error or "SMB 账号启用失败。"
+
+    return True, None
+
+
+def set_share_permissions(share_path, access):
+    mode = 0o775 if access == "guest_rw" else 0o770
+    try:
+        os.chmod(share_path, mode)
+    except OSError:
+        pass
+
+    if PREVIEW_MODE or access == "guest_rw":
+        return
+
+    try:
+        gid = grp.getgrnam(SAMBA_GROUP).gr_gid
+        os.chown(share_path, -1, gid)
+    except (KeyError, OSError):
+        pass
+
+
 def validate_share_payload(payload):
     errors = {}
     name = str(payload.get("name") or "Public").strip()
-    access = str(payload.get("access") or "guest_rw").strip()
+    access = str(payload.get("access") or "authenticated_rw").strip()
 
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{1,30}[A-Za-z0-9]", name):
         errors["name"] = "共享名称需为 3-32 位字母、数字、下划线或短横线。"
-    if access != "guest_rw":
-        errors["access"] = "当前 Alpha 版本仅支持局域网访客读写共享。"
+    if access not in {"authenticated_rw", "guest_rw"}:
+        errors["access"] = "当前 Alpha 版本支持认证读写或访客读写共享。"
+    if access == "authenticated_rw" and not load_setup()["completed"]:
+        errors["access"] = "请先完成初始化管理员设置，再创建认证共享。"
+    if access == "authenticated_rw" and not PREVIEW_MODE:
+        accounts = account_status()
+        if accounts["completed"] and not accounts["configured"]:
+            errors["access"] = "管理员 SMB 账号尚未配置成功，请重新完成初始化或检查 Samba 服务。"
 
     return errors
 
@@ -199,6 +308,7 @@ def create_share(payload):
         return None, errors
 
     requested_name = str(payload.get("name") or "Public").strip()
+    access = str(payload.get("access") or "authenticated_rw").strip()
     folder_name = share_name_to_slug(requested_name)
     share_path = (SHARE_ROOT / folder_name).resolve()
     root = SHARE_ROOT.resolve()
@@ -214,8 +324,8 @@ def create_share(payload):
         "name": requested_name,
         "path": str(share_path),
         "protocol": "SMB",
-        "access": "guest_rw",
-        "access_label": "访客读写",
+        "access": access,
+        "access_label": "访客读写" if access == "guest_rw" else "认证用户读写",
         "status": "active",
         "status_label": "已共享",
         "created_at": utc_now(),
@@ -223,10 +333,7 @@ def create_share(payload):
 
     SHARE_ROOT.mkdir(parents=True, exist_ok=True)
     share_path.mkdir(parents=True, exist_ok=True)
-    try:
-        os.chmod(share_path, 0o775)
-    except OSError:
-        pass
+    set_share_permissions(share_path, access)
 
     shares.append(share)
     state["shares"] = shares
@@ -253,6 +360,8 @@ def load_setup():
         "network_mode": data.get("network_mode") or "dhcp",
         "enable_smb": bool(data.get("enable_smb", True)),
         "completed_at": data.get("completed_at"),
+        "account_configured": bool(data.get("account_configured")),
+        "account_warning": data.get("account_warning"),
     }
 
 
@@ -286,14 +395,20 @@ def complete_setup(payload):
     if errors:
         return None, errors
 
+    admin_username = str(payload["admin_username"]).strip()
+    admin_password = str(payload["admin_password"])
+    account_ok, account_warning = ensure_samba_account(admin_username, admin_password)
+
     data = {
         "completed": True,
         "completed_at": utc_now(),
         "device_name": str(payload["device_name"]).strip(),
-        "admin_username": str(payload["admin_username"]).strip(),
+        "admin_username": admin_username,
         "network_mode": str(payload.get("network_mode", "dhcp")).strip(),
         "enable_smb": bool(payload.get("enable_smb", True)),
-        "password": password_hash(str(payload["admin_password"])),
+        "password": password_hash(admin_password),
+        "account_configured": account_ok,
+        "account_warning": account_warning,
     }
 
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
@@ -303,7 +418,8 @@ def complete_setup(payload):
     except OSError:
         pass
 
-    return load_setup(), None
+    setup = load_setup()
+    return {**setup, "account_configured": account_ok, "account_warning": account_warning}, None
 
 
 def format_bytes(value):

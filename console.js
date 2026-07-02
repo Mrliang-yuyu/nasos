@@ -126,9 +126,9 @@ function renderSharesOverview(data) {
     list.innerHTML = shares.map((share) => `
       <div>
         <strong>${escapeHtml(share.name)}</strong>
-        <span>${escapeHtml(share.protocol || "SMB")} · ${escapeHtml(share.access_label || "访客读写")} · ${escapeHtml(share.status_label || "待创建")}</span>
+        <span>${escapeHtml(share.protocol || "SMB")} · ${escapeHtml(share.access_label || "认证用户读写")} · ${escapeHtml(share.status_label || "待创建")}</span>
       </div>
-    `).join("") || '<div><strong>Public</strong><span>SMB · 等待创建</span></div>';
+    `).join("") || '<div><strong>Public</strong><span>SMB · 认证用户读写 · 等待创建</span></div>';
   }
 
   const protocolList = document.querySelector("[data-protocol-list]");
@@ -139,6 +139,25 @@ function renderSharesOverview(data) {
       <div><span>WebDAV</span><strong class="muted-status">待接入</strong></div>
     `;
   }
+
+  renderAccountOverview(data.accounts || {});
+}
+
+function renderAccountOverview(accounts) {
+  const node = document.querySelector("[data-account-list]");
+  if (!node) return;
+
+  const configured = Boolean(accounts.configured);
+  const preview = Boolean(accounts.preview);
+  const username = accounts.admin_username || "admin";
+  const group = accounts.group || "lingyue-users";
+  const statusText = configured ? (preview ? "预览已记录" : "已接入 SMB") : "等待初始化";
+
+  node.innerHTML = `
+    <div><span>管理员</span><strong>${escapeHtml(username)}</strong></div>
+    <div><span>共享用户组</span><strong>${escapeHtml(group)}</strong></div>
+    <div><span>账号状态</span><strong class="${configured ? "ok" : "planned"}">${statusText}</strong></div>
+  `;
 }
 
 function renderOverview(data) {
@@ -247,6 +266,7 @@ async function completeSetup(event) {
 
     document.querySelector("[data-setup-overlay]")?.setAttribute("hidden", "");
     await loadOverview();
+    await loadSharesOverview();
   } catch (error) {
     showSetupError(error.message);
   }
@@ -361,7 +381,7 @@ async function createPublicShare() {
     const response = await fetch("/api/shares/create", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: "Public", access: "guest_rw" }),
+      body: JSON.stringify({ name: "Public", access: "authenticated_rw" }),
     });
     const result = await response.json();
     if (!response.ok || !result.ok) {
@@ -370,7 +390,7 @@ async function createPublicShare() {
     }
 
     const warning = result.share?.service_warning ? ` ${result.share.service_warning}` : "";
-    showActionNote("[data-share-action-note]", `Public 共享已创建，路径：${result.share.path}。${warning}`.trim(), Boolean(warning));
+    showActionNote("[data-share-action-note]", `Public 认证共享已创建，使用初始化管理员账号访问。路径：${result.share.path}。${warning}`.trim(), Boolean(warning));
     await loadSharesOverview();
     await loadOverview();
   } catch (error) {
@@ -380,6 +400,7 @@ async function createPublicShare() {
 
 function bindShareActions() {
   document.querySelector("[data-create-share]")?.addEventListener("click", createPublicShare);
+  document.querySelector("[data-refresh-shares]")?.addEventListener("click", loadSharesOverview);
 }
 
 document.addEventListener("DOMContentLoaded", async () => {

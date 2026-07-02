@@ -229,18 +229,27 @@
             <h2>共享与权限</h2>
           </div>
           <div class="section-actions">
-            <button type="button" data-create-share>新建 Public 共享</button>
-            <button type="button">管理用户</button>
+            <button type="button" data-create-share>新建认证共享</button>
+            <button type="button" data-refresh-shares>刷新状态</button>
           </div>
         </div>
 
         <p class="action-note" data-share-action-note hidden></p>
 
-        <div class="two-column">
+        <div class="shares-grid">
           <article class="panel">
             <div class="panel-head compact-head"><h3>共享文件夹</h3></div>
             <div class="share-list" data-share-list>
-              <div><strong>Public</strong><span>SMB · 等待创建</span></div>
+              <div><strong>Public</strong><span>SMB · 认证用户读写 · 等待创建</span></div>
+            </div>
+          </article>
+
+          <article class="panel">
+            <div class="panel-head compact-head"><h3>账号与权限</h3></div>
+            <div class="account-list" data-account-list>
+              <div><span>管理员</span><strong>admin</strong></div>
+              <div><span>共享用户组</span><strong>lingyue-users</strong></div>
+              <div><span>账号状态</span><strong class="planned">等待初始化</strong></div>
             </div>
           </article>
 
