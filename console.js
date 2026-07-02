@@ -7,6 +7,7 @@ let setupStep = 0;
 let latestOverview = null;
 let latestStorage = null;
 let latestShares = null;
+let latestInstall = null;
 
 function text(selector, value) {
   const node = document.querySelector(selector);
@@ -101,6 +102,28 @@ function renderStorageOverview(data) {
   if (badge) {
     badge.textContent = data.summary?.available ? "发现可规划磁盘" : "只读扫描完成";
     badge.classList.toggle("ok-badge", Boolean(data.summary?.available));
+  }
+}
+
+function renderInstallOverview(data) {
+  latestInstall = data;
+  text("[data-install-status]", data.ready_label || "等待扫描");
+  text("[data-install-targets]", `${data.candidate_count || 0} 块`);
+  text("[data-install-minimum]", data.minimum_size_label || "16 GB");
+
+  const target = document.querySelector("[data-install-target]");
+  if (target) {
+    const targets = data.targets || [];
+    target.innerHTML = targets.length
+      ? targets.map((disk) => `<option value="${escapeHtml(disk.name)}">${escapeHtml(disk.path)} · ${escapeHtml(disk.size_label)} · ${escapeHtml(disk.model)}</option>`).join("")
+      : '<option value="">未发现可安装磁盘</option>';
+    target.disabled = !targets.length;
+  }
+
+  const steps = document.querySelector("[data-install-steps]");
+  const planSteps = data.latest_plan?.steps || ["扫描空闲磁盘", "生成安装计划", "等待执行安装器"];
+  if (steps) {
+    steps.innerHTML = planSteps.map((step, index) => `<li><span>${index + 1}</span>${escapeHtml(step)}</li>`).join("");
   }
 }
 
@@ -330,6 +353,17 @@ async function loadStorageOverview() {
   }
 }
 
+async function loadInstallOverview() {
+  try {
+    const response = await fetch("/api/install/overview", { cache: "no-store" });
+    if (!response.ok) throw new Error(`Install API returned ${response.status}`);
+    renderInstallOverview(await response.json());
+    showActionNote("[data-install-action-note]", "");
+  } catch (error) {
+    showActionNote("[data-install-action-note]", "当前没有连接安装器 API，ISO 环境中会显示真实安装预检。", true);
+  }
+}
+
 async function loadSharesOverview() {
   try {
     const response = await fetch("/api/shares/overview", { cache: "no-store" });
@@ -376,6 +410,37 @@ function bindStorageActions() {
   document.querySelector("[data-create-pool]")?.addEventListener("click", createPoolPlan);
 }
 
+async function createInstallPlan() {
+  const target = document.querySelector("[data-install-target]")?.value || "";
+  if (!target) {
+    showActionNote("[data-install-action-note]", "未发现可用于安装的空闲磁盘。", true);
+    return;
+  }
+
+  try {
+    const response = await fetch("/api/install/plan", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ target }),
+    });
+    const result = await response.json();
+    if (!response.ok || !result.ok) {
+      const firstError = result.errors ? Object.values(result.errors)[0] : result.error;
+      throw new Error(firstError || "安装计划生成失败。");
+    }
+
+    showActionNote("[data-install-action-note]", `已生成安装计划，目标：${result.plan.target}。当前不会写入磁盘。`);
+    await loadInstallOverview();
+  } catch (error) {
+    showActionNote("[data-install-action-note]", error.message, true);
+  }
+}
+
+function bindInstallActions() {
+  document.querySelector("[data-refresh-install]")?.addEventListener("click", loadInstallOverview);
+  document.querySelector("[data-create-install-plan]")?.addEventListener("click", createInstallPlan);
+}
+
 async function createPublicShare() {
   try {
     const response = await fetch("/api/shares/create", {
@@ -406,9 +471,11 @@ function bindShareActions() {
 document.addEventListener("DOMContentLoaded", async () => {
   bindSetupWizard();
   bindStorageActions();
+  bindInstallActions();
   bindShareActions();
   await loadOverview();
   await loadStorageOverview();
+  await loadInstallOverview();
   await loadSharesOverview();
   await loadSetupState();
 });

@@ -98,6 +98,7 @@
         <a href="#storage">存储</a>
         <a href="#shares">共享</a>
         <a href="#apps">应用中心</a>
+        <a href="#install">安装</a>
         <a href="#backup">备份同步</a>
         <a href="#security">远程与安全</a>
         <a href="#logs">日志告警</a>
@@ -281,6 +282,50 @@
           <article class="app-card"><span>Media</span><strong>影音库</strong><small>运行中 · 1.2 GB</small></article>
           <article class="app-card"><span>Download</span><strong>下载器</strong><small>已停止</small></article>
           <article class="app-card"><span>Sync</span><strong>同步服务</strong><small>运行中 · 180 MB</small></article>
+        </div>
+      </section>
+
+      <section class="module-section" id="install">
+        <div class="section-title">
+          <div>
+            <span class="kicker">Installer</span>
+            <h2>系统安装</h2>
+          </div>
+          <div class="section-actions">
+            <button type="button" data-create-install-plan>生成安装计划</button>
+            <button type="button" data-refresh-install>重新预检</button>
+          </div>
+        </div>
+
+        <div class="storage-summary">
+          <div><span>安装状态</span><strong data-install-status>等待扫描</strong></div>
+          <div><span>可安装磁盘</span><strong data-install-targets>0 块</strong></div>
+          <div><span>最低容量</span><strong data-install-minimum>16 GB</strong></div>
+          <div><span>执行模式</span><strong>仅计划</strong></div>
+        </div>
+
+        <p class="action-note" data-install-action-note hidden></p>
+
+        <div class="two-column">
+          <article class="panel installer-panel">
+            <div class="panel-head compact-head"><h3>目标磁盘</h3></div>
+            <label class="field-stack">
+              <span>选择安装目标</span>
+              <select data-install-target>
+                <option value="">等待扫描</option>
+              </select>
+            </label>
+            <p>当前只生成安装计划，不会分区、格式化或写入引导器。</p>
+          </article>
+
+          <article class="panel installer-panel">
+            <div class="panel-head compact-head"><h3>安装步骤</h3></div>
+            <ol class="install-steps" data-install-steps>
+              <li><span>1</span>扫描空闲磁盘</li>
+              <li><span>2</span>生成安装计划</li>
+              <li><span>3</span>等待执行安装器</li>
+            </ol>
+          </article>
         </div>
       </section>
 

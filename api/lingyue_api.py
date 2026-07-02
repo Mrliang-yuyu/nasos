@@ -23,6 +23,7 @@ PREVIEW_MODE = bool(STATIC_DIR)
 CONFIG_DIR = Path(os.environ.get("LINGYUE_CONFIG_DIR") or (Path(STATIC_DIR) / ".lingyue-state" if STATIC_DIR else "/var/lib/lingyue"))
 SETUP_FILE = CONFIG_DIR / "setup.json"
 STORAGE_FILE = CONFIG_DIR / "storage.json"
+INSTALL_FILE = CONFIG_DIR / "install.json"
 SHARE_ROOT = Path(os.environ.get("LINGYUE_SHARE_ROOT") or (CONFIG_DIR / "shares" if STATIC_DIR else "/srv/lingyue/shares"))
 SAMBA_MAIN = Path(os.environ.get("LINGYUE_SAMBA_MAIN") or (CONFIG_DIR / "samba/smb.conf" if STATIC_DIR else "/etc/samba/smb.conf"))
 SAMBA_SNIPPET = Path(os.environ.get("LINGYUE_SAMBA_SNIPPET") or (CONFIG_DIR / "samba/lingyue-shares.conf" if STATIC_DIR else "/etc/samba/smb.conf.d/lingyue-shares.conf"))
@@ -81,6 +82,24 @@ def save_storage_state(data):
     STORAGE_FILE.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     try:
         os.chmod(STORAGE_FILE, 0o600)
+    except OSError:
+        pass
+
+
+def load_install_state():
+    try:
+        data = json.loads(INSTALL_FILE.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        data = {}
+
+    return {"plans": data.get("plans") if isinstance(data.get("plans"), list) else []}
+
+
+def save_install_state(data):
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    INSTALL_FILE.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    try:
+        os.chmod(INSTALL_FILE, 0o600)
     except OSError:
         pass
 
@@ -665,6 +684,63 @@ def create_pool_plan(payload):
     return plan, None
 
 
+def installer_target_candidates():
+    disks = storage_overview()["disks"]
+    return [disk for disk in disks if disk.get("role") == "available" and disk.get("size", 0) >= 16 * 1024**3]
+
+
+def install_overview():
+    candidates = installer_target_candidates()
+    plans = load_install_state()["plans"]
+    latest_plan = plans[-1] if plans else None
+    ready = bool(candidates)
+
+    return {
+        "generated_at": int(time.time()),
+        "mode": "plan_only",
+        "ready": ready,
+        "ready_label": "可生成安装计划" if ready else "等待可安装磁盘",
+        "candidate_count": len(candidates),
+        "minimum_size_label": "16 GB",
+        "targets": candidates,
+        "latest_plan": latest_plan,
+        "warnings": [
+            "当前版本仅生成安装计划，不会写入、格式化或分区磁盘。",
+            "真正执行安装前会加入二次确认、日志和恢复入口。",
+        ],
+    }
+
+
+def create_install_plan(payload):
+    target = str(payload.get("target") or "").strip()
+    candidates = installer_target_candidates()
+    selected = next((disk for disk in candidates if disk.get("name") == target or disk.get("path") == target), None)
+
+    if not selected:
+        return None, {"target": "请选择一块未挂载且不低于 16 GB 的空闲磁盘。"}
+
+    plan = {
+        "id": f"install-{int(time.time())}",
+        "target": selected["path"],
+        "target_name": selected["name"],
+        "target_size_label": selected["size_label"],
+        "status": "planned",
+        "status_label": "待执行",
+        "created_at": utc_now(),
+        "steps": [
+            "校验目标磁盘仍为空闲状态",
+            "创建 EFI、系统和数据保留分区",
+            "安装 Debian 基础系统与凌岳OS 控制台",
+            "写入引导器、网络配置和初始化服务",
+            "重启后从硬盘进入凌岳OS",
+        ],
+    }
+    state = load_install_state()
+    state["plans"] = [plan]
+    save_install_state(state)
+    return plan, None
+
+
 def network_info():
     interfaces = []
     base = Path("/sys/class/net")
@@ -776,6 +852,9 @@ class Handler(BaseHTTPRequestHandler):
         if parsed.path == "/api/storage/overview":
             self.send_json(storage_overview())
             return
+        if parsed.path == "/api/install/overview":
+            self.send_json(install_overview())
+            return
         if parsed.path == "/api/shares/overview":
             self.send_json(shares_overview())
             return
@@ -788,7 +867,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         parsed = urlparse(self.path)
-        if parsed.path not in {"/api/setup/complete", "/api/storage/pools/plan", "/api/shares/create"}:
+        if parsed.path not in {"/api/setup/complete", "/api/storage/pools/plan", "/api/install/plan", "/api/shares/create"}:
             self.send_response(404)
             self.end_headers()
             return
@@ -816,6 +895,15 @@ class Handler(BaseHTTPRequestHandler):
                 return
 
             self.send_json({"ok": True, "pool": plan})
+            return
+
+        if parsed.path == "/api/install/plan":
+            plan, errors = create_install_plan(payload)
+            if errors:
+                self.send_json({"ok": False, "errors": errors}, status=400)
+                return
+
+            self.send_json({"ok": True, "plan": plan})
             return
 
         share, errors = create_share(payload)
