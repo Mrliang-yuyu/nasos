@@ -5,6 +5,7 @@ const stateText = {
 
 let setupStep = 0;
 let latestOverview = null;
+let latestStorage = null;
 
 function text(selector, value) {
   const node = document.querySelector(selector);
@@ -20,6 +21,32 @@ function setUsage(percent) {
   }
 }
 
+function showActionNote(selector, message, isError = false) {
+  const node = document.querySelector(selector);
+  if (!node) return;
+  node.textContent = message || "";
+  node.hidden = !message;
+  node.classList.toggle("error", isError);
+}
+
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>'"]/g, (char) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    "'": "&#39;",
+    '"': "&quot;",
+  }[char]));
+}
+
+function diskRoleLabel(role) {
+  return {
+    system: "系统盘",
+    mounted: "已挂载",
+    available: "可规划",
+  }[role] || "未知";
+}
+
 function renderDisks(disks) {
   const grid = document.querySelector("[data-disk-grid]");
   if (!grid || !Array.isArray(disks)) {
@@ -32,12 +59,48 @@ function renderDisks(disks) {
   }
 
   grid.innerHTML = disks.slice(0, 6).map((disk, index) => `
-    <div class="disk-card">
-      <span>Disk ${index + 1} · ${disk.name}</span>
-      <strong>${disk.size_label}</strong>
-      <small>${disk.model} · ${disk.transport}</small>
+    <div class="disk-card ${disk.pool_candidate ? "candidate" : ""}">
+      <span>Disk ${index + 1} · ${escapeHtml(disk.name)}</span>
+      <strong>${escapeHtml(disk.size_label)}</strong>
+      <small>${escapeHtml(disk.model)} · ${escapeHtml(disk.transport)} · ${diskRoleLabel(disk.role)}</small>
     </div>
   `).join("");
+}
+
+function renderPoolList(pools) {
+  const node = document.querySelector("[data-pool-list]");
+  if (!node || !Array.isArray(pools)) return;
+
+  if (!pools.length) {
+    node.innerHTML = '<div class="table-row"><span>未创建</span><span>等待规划</span><span>--</span><span>待处理</span></div>';
+    return;
+  }
+
+  node.innerHTML = pools.map((pool) => `
+    <div class="table-row">
+      <span>${escapeHtml(pool.name)}</span>
+      <span>${escapeHtml(pool.mode_label || pool.mode)}</span>
+      <span>${escapeHtml(pool.capacity_label || "--")}</span>
+      <span class="planned">${escapeHtml(pool.status_label || "待执行")}</span>
+    </div>
+  `).join("");
+}
+
+function renderStorageOverview(data) {
+  latestStorage = data;
+  renderDisks(data.disks || []);
+  renderPoolList(data.pools || []);
+
+  text("[data-storage-disk-total]", `${data.summary?.total || 0} 块`);
+  text("[data-storage-disk-available]", `${data.summary?.available || 0} 块`);
+  text("[data-storage-recommendation]", data.recommendation?.label || "等待磁盘");
+  text("[data-storage-recommendation-capacity]", data.recommendation?.capacity_label || "--");
+
+  const badge = document.querySelector("[data-storage-scan-badge]");
+  if (badge) {
+    badge.textContent = data.summary?.available ? "发现可规划磁盘" : "只读扫描完成";
+    badge.classList.toggle("ok-badge", Boolean(data.summary?.available));
+  }
 }
 
 function renderServices(services) {
@@ -212,8 +275,56 @@ async function loadOverview() {
   }
 }
 
+async function loadStorageOverview() {
+  try {
+    const response = await fetch("/api/storage/overview", { cache: "no-store" });
+    if (!response.ok) throw new Error(`Storage API returned ${response.status}`);
+    renderStorageOverview(await response.json());
+    showActionNote("[data-storage-action-note]", "");
+  } catch (error) {
+    showActionNote("[data-storage-action-note]", "当前没有连接存储 API，ISO 环境中会显示真实磁盘扫描结果。", true);
+  }
+}
+
+async function createPoolPlan() {
+  const recommendation = latestStorage?.recommendation;
+  if (!recommendation || recommendation.mode === "none") {
+    showActionNote("[data-storage-action-note]", recommendation?.message || "未发现可用于规划的空闲磁盘。", true);
+    return;
+  }
+
+  try {
+    const response = await fetch("/api/storage/pools/plan", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "MainPool",
+        mode: recommendation.mode,
+        disk_names: recommendation.disk_names,
+      }),
+    });
+    const result = await response.json();
+    if (!response.ok || !result.ok) {
+      const firstError = result.errors ? Object.values(result.errors)[0] : result.error;
+      throw new Error(firstError || "创建规划失败。");
+    }
+
+    showActionNote("[data-storage-action-note]", "已生成存储池规划。当前版本不会格式化磁盘，后续会加入二次确认和执行日志。");
+    await loadStorageOverview();
+  } catch (error) {
+    showActionNote("[data-storage-action-note]", error.message, true);
+  }
+}
+
+function bindStorageActions() {
+  document.querySelector("[data-refresh-storage]")?.addEventListener("click", loadStorageOverview);
+  document.querySelector("[data-create-pool]")?.addEventListener("click", createPoolPlan);
+}
+
 document.addEventListener("DOMContentLoaded", async () => {
   bindSetupWizard();
+  bindStorageActions();
   await loadOverview();
+  await loadStorageOverview();
   await loadSetupState();
 });

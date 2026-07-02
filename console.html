@@ -170,16 +170,25 @@
             <h2>存储管理</h2>
           </div>
           <div class="section-actions">
-            <button type="button">创建存储池</button>
-            <button type="button">健康检查</button>
+            <button type="button" data-create-pool>创建存储池规划</button>
+            <button type="button" data-refresh-storage>重新扫描</button>
           </div>
         </div>
+
+        <div class="storage-summary" data-storage-summary>
+          <div><span>磁盘总数</span><strong data-storage-disk-total>扫描中</strong></div>
+          <div><span>可规划磁盘</span><strong data-storage-disk-available>扫描中</strong></div>
+          <div><span>建议方案</span><strong data-storage-recommendation>等待扫描</strong></div>
+          <div><span>预计容量</span><strong data-storage-recommendation-capacity>--</strong></div>
+        </div>
+
+        <p class="action-note" data-storage-action-note hidden></p>
 
         <div class="storage-layout">
           <article class="panel large-panel">
             <div class="panel-head compact-head">
               <h3>磁盘列表</h3>
-              <span class="badge ok-badge">全部健康</span>
+              <span class="badge ok-badge" data-storage-scan-badge>全部健康</span>
             </div>
             <div class="disk-grid" data-disk-grid>
               <div class="disk-card"><span>Disk 1</span><strong>8 TB</strong><small>35 C · SATA</small></div>
@@ -195,8 +204,9 @@
             </div>
             <div class="table-list">
               <div class="table-row header"><span>名称</span><span>模式</span><span>容量</span><span>状态</span></div>
-              <div class="table-row"><span>MainPool</span><span>Btrfs Mirror</span><span>18.4 TB</span><span class="ok">健康</span></div>
-              <div class="table-row"><span>AppData</span><span>Btrfs Single</span><span>1.8 TB</span><span class="ok">健康</span></div>
+              <div data-pool-list>
+                <div class="table-row"><span>未创建</span><span>等待规划</span><span>--</span><span>待处理</span></div>
+              </div>
             </div>
           </article>
 

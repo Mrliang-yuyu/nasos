@@ -20,6 +20,7 @@ PORT = int(os.environ.get("LINGYUE_API_PORT", "8088"))
 STATIC_DIR = os.environ.get("LINGYUE_STATIC_DIR")
 CONFIG_DIR = Path(os.environ.get("LINGYUE_CONFIG_DIR") or (Path(STATIC_DIR) / ".lingyue-state" if STATIC_DIR else "/var/lib/lingyue"))
 SETUP_FILE = CONFIG_DIR / "setup.json"
+STORAGE_FILE = CONFIG_DIR / "storage.json"
 
 
 def utc_now():
@@ -43,6 +44,27 @@ def run_command(args):
         return ""
 
     return result.stdout.strip()
+
+
+def load_storage_state():
+    try:
+        data = json.loads(STORAGE_FILE.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        data = {}
+
+    return {
+        "pool_plans": data.get("pool_plans") if isinstance(data.get("pool_plans"), list) else [],
+        "shares": data.get("shares") if isinstance(data.get("shares"), list) else [],
+    }
+
+
+def save_storage_state(data):
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    STORAGE_FILE.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    try:
+        os.chmod(STORAGE_FILE, 0o600)
+    except OSError:
+        pass
 
 
 def load_setup():
@@ -173,6 +195,39 @@ def uptime_label():
     return f"{minutes} 分钟"
 
 
+def flatten_mountpoints(item):
+    values = []
+    for key in ("mountpoint", "mountpoints"):
+        value = item.get(key)
+        if isinstance(value, list):
+            values.extend([entry for entry in value if entry])
+        elif value:
+            values.append(value)
+
+    for child in item.get("children") or []:
+        values.extend(flatten_mountpoints(child))
+    return sorted(set(values))
+
+
+def flatten_fstypes(item):
+    values = []
+    value = item.get("fstype")
+    if value:
+        values.append(value)
+    for child in item.get("children") or []:
+        values.extend(flatten_fstypes(child))
+    return sorted(set(values))
+
+
+def disk_role(mountpoints):
+    system_mounts = {"/", "/boot", "/boot/efi", "/usr", "/var", "/home"}
+    if any(point in system_mounts for point in mountpoints):
+        return "system"
+    if mountpoints:
+        return "mounted"
+    return "available"
+
+
 def block_devices():
     output = run_command(["lsblk", "-b", "-J", "-o", "NAME,TYPE,SIZE,MODEL,TRAN,MOUNTPOINT,FSTYPE"])
     if not output:
@@ -188,12 +243,21 @@ def block_devices():
         if item.get("type") != "disk":
             continue
 
+        mountpoints = flatten_mountpoints(item)
+        fstypes = flatten_fstypes(item)
+        role = disk_role(mountpoints)
+
         disks.append({
             "name": item.get("name", "disk"),
+            "path": f"/dev/{item.get('name', 'disk')}",
             "size": int(item.get("size") or 0),
             "size_label": format_bytes(item.get("size") or 0),
             "model": item.get("model") or "未知型号",
             "transport": item.get("tran") or "system",
+            "mountpoints": mountpoints,
+            "fstypes": fstypes,
+            "role": role,
+            "pool_candidate": role == "available" and int(item.get("size") or 0) > 0,
             "status": "online",
         })
 
@@ -219,6 +283,97 @@ def storage_info():
         "disk_count": disk_count,
         "disk_health": f"{disk_count} / {disk_count}" if disk_count else "0 / 0",
     }
+
+
+def storage_overview():
+    storage = storage_info()
+    state = load_storage_state()
+    disks = storage["disks"]
+    candidates = [disk for disk in disks if disk.get("pool_candidate")]
+    system_disks = [disk for disk in disks if disk.get("role") == "system"]
+    mounted_disks = [disk for disk in disks if disk.get("role") == "mounted"]
+
+    return {
+        "generated_at": int(time.time()),
+        "root": storage["root"],
+        "disks": disks,
+        "summary": {
+            "total": len(disks),
+            "available": len(candidates),
+            "system": len(system_disks),
+            "mounted": len(mounted_disks),
+            "total_capacity": sum(disk.get("size", 0) for disk in disks),
+            "total_capacity_label": format_bytes(sum(disk.get("size", 0) for disk in disks)),
+        },
+        "pools": state["pool_plans"],
+        "shares": state["shares"],
+        "recommendation": pool_recommendation(candidates),
+    }
+
+
+def pool_recommendation(candidates):
+    if len(candidates) >= 2:
+        return {
+            "mode": "mirror",
+            "label": "镜像池",
+            "disk_names": [disk["name"] for disk in candidates[:2]],
+            "capacity_label": format_bytes(min(disk.get("size", 0) for disk in candidates[:2])),
+            "message": "已找到可用于规划的空闲磁盘。",
+        }
+    if len(candidates) == 1:
+        return {
+            "mode": "single",
+            "label": "单盘池",
+            "disk_names": [candidates[0]["name"]],
+            "capacity_label": candidates[0].get("size_label", "0 B"),
+            "message": "可先规划单盘池，后续再扩展冗余。",
+        }
+    return {
+        "mode": "none",
+        "label": "等待磁盘",
+        "disk_names": [],
+        "capacity_label": "0 B",
+        "message": "未发现可安全规划的空闲磁盘。",
+    }
+
+
+def create_pool_plan(payload):
+    name = str(payload.get("name") or "MainPool").strip()
+    mode = str(payload.get("mode") or "mirror").strip()
+    disk_names = payload.get("disk_names") or []
+    available_names = {disk["name"] for disk in storage_overview()["disks"] if disk.get("pool_candidate")}
+
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{2,31}", name):
+        return None, {"name": "存储池名称需为 3-32 位字母、数字、下划线或短横线。"}
+    if mode not in {"single", "mirror"}:
+        return None, {"mode": "当前版本仅支持单盘池或镜像池规划。"}
+    if not isinstance(disk_names, list) or not disk_names:
+        return None, {"disk_names": "请选择可用磁盘。"}
+    if any(name not in available_names for name in disk_names):
+        return None, {"disk_names": "包含不可用于存储池规划的磁盘。"}
+    if mode == "mirror" and len(disk_names) < 2:
+        return None, {"mode": "镜像池至少需要 2 块可用磁盘。"}
+
+    state = load_storage_state()
+    plans = [plan for plan in state["pool_plans"] if plan.get("name") != name]
+    selected_disks = [disk for disk in storage_overview()["disks"] if disk.get("name") in disk_names]
+    raw_capacity = min((disk.get("size", 0) for disk in selected_disks), default=0) if mode == "mirror" else sum(disk.get("size", 0) for disk in selected_disks)
+    plan = {
+        "id": f"pool-{int(time.time())}",
+        "name": name,
+        "mode": mode,
+        "mode_label": "Btrfs Mirror" if mode == "mirror" else "Btrfs Single",
+        "disk_names": disk_names,
+        "capacity": raw_capacity,
+        "capacity_label": format_bytes(raw_capacity),
+        "status": "planned",
+        "status_label": "待执行",
+        "created_at": utc_now(),
+    }
+    plans.append(plan)
+    state["pool_plans"] = plans
+    save_storage_state(state)
+    return plan, None
 
 
 def network_info():
@@ -329,6 +484,9 @@ class Handler(BaseHTTPRequestHandler):
         if parsed.path == "/api/system/overview":
             self.send_json(overview())
             return
+        if parsed.path == "/api/storage/overview":
+            self.send_json(storage_overview())
+            return
         if STATIC_DIR:
             self.send_static(parsed.path)
             return
@@ -338,7 +496,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         parsed = urlparse(self.path)
-        if parsed.path != "/api/setup/complete":
+        if parsed.path not in {"/api/setup/complete", "/api/storage/pools/plan"}:
             self.send_response(404)
             self.end_headers()
             return
@@ -350,12 +508,21 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json({"ok": False, "error": "请求格式无效。"}, status=400)
             return
 
-        setup, errors = complete_setup(payload)
+        if parsed.path == "/api/setup/complete":
+            setup, errors = complete_setup(payload)
+            if errors:
+                self.send_json({"ok": False, "errors": errors}, status=400)
+                return
+
+            self.send_json({"ok": True, "setup": setup})
+            return
+
+        plan, errors = create_pool_plan(payload)
         if errors:
             self.send_json({"ok": False, "errors": errors}, status=400)
             return
 
-        self.send_json({"ok": True, "setup": setup})
+        self.send_json({"ok": True, "pool": plan})
 
     def send_static(self, request_path):
         target = self.static_target(request_path)

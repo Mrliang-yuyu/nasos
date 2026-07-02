@@ -467,6 +467,51 @@ input[type="checkbox"] {
   gap: 14px;
 }
 
+.storage-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.storage-summary div,
+.action-note {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.storage-summary div {
+  min-height: 92px;
+  padding: 16px;
+}
+
+.storage-summary span,
+.storage-summary strong {
+  display: block;
+}
+
+.storage-summary span {
+  margin-bottom: 10px;
+  color: var(--faint);
+  font-size: 0.86rem;
+}
+
+.storage-summary strong {
+  font-size: 1.35rem;
+}
+
+.action-note {
+  margin: 0 0 14px;
+  padding: 13px 15px;
+  color: var(--success);
+  font-weight: 800;
+}
+
+.action-note.error {
+  color: var(--warn);
+}
+
 .large-panel {
   grid-row: span 2;
 }
@@ -556,6 +601,11 @@ input[type="checkbox"] {
   font-size: 1.6rem;
 }
 
+.disk-card.candidate {
+  border-color: rgba(117, 228, 183, 0.26);
+  background: linear-gradient(135deg, rgba(117, 228, 183, 0.08), rgba(255, 255, 255, 0.025));
+}
+
 .disk-card span,
 .disk-card small,
 .app-card span,
@@ -583,6 +633,11 @@ input[type="checkbox"] {
 
 .ok {
   color: var(--success);
+  font-weight: 800;
+}
+
+.planned {
+  color: var(--warn);
   font-weight: 800;
 }
 
@@ -721,6 +776,7 @@ input[type="checkbox"] {
   .status-grid,
   .two-column,
   .storage-layout,
+  .storage-summary,
   .app-store-grid,
   .security-grid {
     grid-template-columns: 1fr 1fr;
@@ -752,6 +808,7 @@ input[type="checkbox"] {
   .two-column,
   .app-grid,
   .storage-layout,
+  .storage-summary,
   .disk-grid,
   .app-store-grid,
   .security-grid {
