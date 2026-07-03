@@ -218,6 +218,18 @@ def account_status():
     linux_user = user_exists(username) if setup["completed"] else False
     samba_user = samba_user_exists(username) if setup["completed"] else False
     group_ready = group_exists(SAMBA_GROUP) if setup["completed"] else False
+    configured = bool(setup["completed"] and (PREVIEW_MODE or (linux_user and samba_user and group_ready)))
+    users = []
+    if setup["completed"]:
+        users.append({
+            "username": username,
+            "display_name": "系统管理员",
+            "role": "admin",
+            "role_label": "管理员",
+            "smb_enabled": bool(PREVIEW_MODE or samba_user),
+            "status": "active" if configured else "pending",
+            "status_label": "可用" if configured else "等待系统账号同步",
+        })
 
     return {
         "admin_username": username,
@@ -226,8 +238,14 @@ def account_status():
         "linux_user": linux_user,
         "samba_user": samba_user,
         "group_ready": group_ready,
-        "configured": bool(setup["completed"] and (PREVIEW_MODE or (linux_user and samba_user and group_ready))),
+        "configured": configured,
         "preview": PREVIEW_MODE,
+        "users": users,
+        "roles": [
+            {"id": "admin", "label": "管理员", "description": "管理系统、存储池、共享和安装器。"},
+            {"id": "member", "label": "成员", "description": "访问被授权的共享文件夹。"},
+            {"id": "guest", "label": "访客", "description": "用于临时或只读共享访问。"},
+        ],
     }
 
 

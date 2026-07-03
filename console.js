@@ -270,13 +270,33 @@ function renderAccountOverview(accounts) {
   const preview = Boolean(accounts.preview);
   const username = accounts.admin_username || "admin";
   const group = accounts.group || "lingyue-users";
-  const statusText = configured ? (preview ? "预览已记录" : "已接入 SMB") : "等待初始化";
+  const statusText = accounts.completed ? (configured ? (preview ? "预览已记录" : "已接入 SMB") : "等待同步") : "等待创建管理员";
 
   node.innerHTML = `
     <div><span>管理员</span><strong>${escapeHtml(username)}</strong></div>
     <div><span>共享用户组</span><strong>${escapeHtml(group)}</strong></div>
     <div><span>账号状态</span><strong class="${configured ? "ok" : "planned"}">${statusText}</strong></div>
   `;
+
+  const userList = document.querySelector("[data-user-list]");
+  if (userList) {
+    const users = Array.isArray(accounts.users) ? accounts.users : [];
+    userList.innerHTML = users.length
+      ? users.map((user) => `
+        <div>
+          <strong>${escapeHtml(user.display_name || user.username)}</strong>
+          <span>${escapeHtml(user.username)} · ${escapeHtml(user.role_label || user.role)} · ${escapeHtml(user.status_label || "已记录")}</span>
+        </div>
+      `).join("")
+      : '<div><strong>等待创建管理员</strong><span>首次初始化完成后，这里会显示系统管理员。</span></div>';
+  }
+
+  const roleList = document.querySelector("[data-role-list]");
+  if (roleList && Array.isArray(accounts.roles) && accounts.roles.length) {
+    roleList.innerHTML = accounts.roles.map((role) => `
+      <div><strong>${escapeHtml(role.label)}</strong><span>${escapeHtml(role.description)}</span></div>
+    `).join("");
+  }
 }
 
 function renderOverview(data) {

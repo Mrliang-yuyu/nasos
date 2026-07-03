@@ -609,6 +609,8 @@ input[type="checkbox"] {
 .table-list,
 .share-list,
 .account-list,
+.user-list,
+.role-list,
 .event-list {
   display: grid;
   gap: 10px;
@@ -698,6 +700,8 @@ input[type="checkbox"] {
 
 .share-list div,
 .account-list div,
+.user-list div,
+.role-list div,
 .app-grid span {
   padding: 16px;
   border: 1px solid var(--line);
@@ -721,12 +725,18 @@ input[type="checkbox"] {
 .share-list strong,
 .share-list span,
 .account-list strong,
-.account-list span {
+.account-list span,
+.user-list strong,
+.user-list span,
+.role-list strong,
+.role-list span {
   display: block;
 }
 
 .share-list span,
-.account-list span {
+.account-list span,
+.user-list span,
+.role-list span {
   margin-top: 6px;
   color: var(--faint);
   font-size: 0.9rem;
@@ -741,6 +751,12 @@ input[type="checkbox"] {
 
 .account-list span {
   margin-top: 0;
+}
+
+.users-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
 }
 
 .app-grid {
@@ -984,6 +1000,7 @@ input[type="checkbox"] {
   .status-grid,
   .two-column,
   .shares-grid,
+  .users-grid,
   .storage-layout,
   .storage-summary,
   .app-store-grid,
@@ -1016,6 +1033,7 @@ input[type="checkbox"] {
   .status-grid,
   .two-column,
   .shares-grid,
+  .users-grid,
   .app-grid,
   .storage-layout,
   .storage-summary,

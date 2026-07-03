@@ -15,8 +15,8 @@
     <section class="setup-dialog" aria-labelledby="setup-title">
       <div class="setup-head">
         <span class="kicker">First Run</span>
-        <h2 id="setup-title">初始化凌岳OS</h2>
-        <p>完成基础设置后，控制台会进入正式管理状态。</p>
+        <h2 id="setup-title">创建管理员账号</h2>
+        <p>首次启动只创建一位系统管理员。后续用户由管理员在控制台里添加。</p>
       </div>
 
       <ol class="setup-steps" aria-label="初始化步骤">
@@ -44,6 +44,7 @@
             <span>管理员密码</span>
             <input name="admin_password" type="password" autocomplete="new-password" />
           </label>
+          <p>这个账号会同时用于登录控制台和访问需要认证的 SMB 共享。</p>
         </section>
 
         <section class="setup-page" data-setup-page="2">
@@ -69,7 +70,7 @@
             <div><span>当前 IP</span><strong data-setup-ip>扫描中</strong></div>
             <div><span>系统状态</span><strong data-setup-health>准备就绪</strong></div>
           </div>
-          <p>当前版本会保存初始化配置，不会自动格式化磁盘。</p>
+          <p>完成后会保存管理员账号并自动登录。当前版本不会自动格式化磁盘。</p>
         </section>
 
         <p class="setup-error" data-setup-error hidden></p>
@@ -77,7 +78,7 @@
         <div class="setup-actions">
           <button type="button" data-setup-prev>上一步</button>
           <button type="button" class="avatar" data-setup-next>下一步</button>
-          <button type="submit" class="avatar" data-setup-finish hidden>完成初始化</button>
+          <button type="submit" class="avatar" data-setup-finish hidden>创建并进入系统</button>
         </div>
       </form>
     </section>
@@ -123,6 +124,7 @@
         <a class="active" href="#dashboard">仪表盘</a>
         <a href="#storage">存储</a>
         <a href="#shares">共享</a>
+        <a href="#users">用户与权限</a>
         <a href="#apps">应用中心</a>
         <a href="#install">安装</a>
         <a href="#backup">备份同步</a>
@@ -272,7 +274,7 @@
         <div class="section-title">
           <div>
             <span class="kicker">Shares</span>
-            <h2>共享与权限</h2>
+            <h2>共享文件夹</h2>
           </div>
           <div class="section-actions">
             <button type="button" data-create-share data-auth-required>新建认证共享</button>
@@ -291,7 +293,31 @@
           </article>
 
           <article class="panel">
-            <div class="panel-head compact-head"><h3>账号与权限</h3></div>
+            <div class="panel-head compact-head"><h3>协议状态</h3></div>
+            <div class="protocol-list" data-protocol-list>
+              <div><span>SMB</span><strong class="ok">已启用</strong></div>
+              <div><span>NFS</span><strong>未启用</strong></div>
+              <div><span>WebDAV</span><strong>未启用</strong></div>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="module-section" id="users">
+        <div class="section-title">
+          <div>
+            <span class="kicker">Identity</span>
+            <h2>用户与权限</h2>
+          </div>
+          <div class="section-actions">
+            <button type="button" data-auth-required disabled>新增用户</button>
+            <button type="button" data-refresh-shares>刷新状态</button>
+          </div>
+        </div>
+
+        <div class="users-grid">
+          <article class="panel">
+            <div class="panel-head compact-head"><h3>账号概览</h3></div>
             <div class="account-list" data-account-list>
               <div><span>管理员</span><strong>admin</strong></div>
               <div><span>共享用户组</span><strong>lingyue-users</strong></div>
@@ -300,11 +326,18 @@
           </article>
 
           <article class="panel">
-            <div class="panel-head compact-head"><h3>协议状态</h3></div>
-            <div class="protocol-list" data-protocol-list>
-              <div><span>SMB</span><strong class="ok">已启用</strong></div>
-              <div><span>NFS</span><strong>未启用</strong></div>
-              <div><span>WebDAV</span><strong>未启用</strong></div>
+            <div class="panel-head compact-head"><h3>用户列表</h3></div>
+            <div class="user-list" data-user-list>
+              <div><strong>等待初始化</strong><span>首次创建管理员后显示系统账号。</span></div>
+            </div>
+          </article>
+
+          <article class="panel">
+            <div class="panel-head compact-head"><h3>角色模板</h3></div>
+            <div class="role-list" data-role-list>
+              <div><strong>管理员</strong><span>管理系统、存储池、共享和安装器。</span></div>
+              <div><strong>成员</strong><span>访问被授权的共享文件夹。</span></div>
+              <div><strong>访客</strong><span>用于临时或只读共享访问。</span></div>
             </div>
           </article>
         </div>
