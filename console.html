@@ -316,16 +316,38 @@
                 <option value="">等待扫描</option>
               </select>
             </label>
-            <p>当前只生成安装计划，不会分区、格式化或写入引导器。</p>
+            <div class="install-target-detail" data-install-target-detail>
+              <span>目标详情</span>
+              <strong>等待选择磁盘</strong>
+              <small>当前不会分区、格式化或写入引导器。</small>
+            </div>
           </article>
 
           <article class="panel installer-panel">
-            <div class="panel-head compact-head"><h3>安装步骤</h3></div>
+            <div class="panel-head compact-head"><h3>阶段进度</h3></div>
             <ol class="install-steps" data-install-steps>
               <li><span>1</span>扫描空闲磁盘</li>
               <li><span>2</span>生成安装计划</li>
               <li><span>3</span>等待执行安装器</li>
             </ol>
+          </article>
+        </div>
+
+        <div class="two-column install-detail-grid">
+          <article class="panel installer-panel">
+            <div class="panel-head compact-head"><h3>分区布局</h3></div>
+            <div class="partition-list" data-install-partitions>
+              <div><span>等待计划</span><strong>--</strong><small>生成安装计划后显示布局</small></div>
+            </div>
+          </article>
+
+          <article class="panel installer-panel">
+            <div class="panel-head compact-head"><h3>最近执行</h3></div>
+            <div class="install-run-card" data-install-run>
+              <span>未执行</span>
+              <strong>等待安装检查</strong>
+              <small>执行前需要确认短语与安全开关。</small>
+            </div>
           </article>
         </div>
 

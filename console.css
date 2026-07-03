@@ -775,6 +775,51 @@ input[type="checkbox"] {
   line-height: 1.7;
 }
 
+.install-target-detail,
+.install-run-card,
+.partition-list div {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.018));
+}
+
+.install-target-detail span,
+.install-run-card span,
+.partition-list span {
+  color: var(--faint);
+  font-size: 0.76rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.install-target-detail strong,
+.install-run-card strong,
+.partition-list strong {
+  overflow-wrap: anywhere;
+  color: var(--text);
+  font-size: 1rem;
+}
+
+.install-target-detail small,
+.install-run-card small,
+.partition-list small {
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.install-detail-grid {
+  margin-top: 14px;
+}
+
+.partition-list {
+  display: grid;
+  gap: 10px;
+}
+
 .install-steps {
   display: grid;
   gap: 12px;
@@ -792,6 +837,23 @@ input[type="checkbox"] {
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.025);
   color: var(--muted);
+}
+
+.install-steps li.completed {
+  border-color: rgba(82, 211, 168, 0.28);
+  background: rgba(82, 211, 168, 0.08);
+  color: var(--text);
+}
+
+.install-steps li.blocked,
+.install-steps li.failed {
+  border-color: rgba(255, 113, 91, 0.28);
+  background: rgba(255, 113, 91, 0.08);
+}
+
+.install-steps li.validated {
+  border-color: rgba(207, 198, 255, 0.35);
+  background: rgba(207, 198, 255, 0.08);
 }
 
 .install-steps span {

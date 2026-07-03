@@ -121,15 +121,41 @@ function renderInstallOverview(data) {
     target.disabled = !targets.length;
   }
 
+  const activeTarget = data.latest_plan?.target || (data.targets || [])[0]?.path;
+  const targetDetail = document.querySelector("[data-install-target-detail]");
+  if (targetDetail) {
+    const disk = (data.targets || []).find((item) => item.path === activeTarget) || data.latest_plan;
+    targetDetail.innerHTML = disk
+      ? `<span>目标详情</span><strong>${escapeHtml(disk.target || disk.path || "--")}</strong><small>${escapeHtml(disk.target_size_label || disk.size_label || "--")} · ${escapeHtml(disk.model || "已生成计划")}</small>`
+      : '<span>目标详情</span><strong>等待选择磁盘</strong><small>当前不会分区、格式化或写入引导器。</small>';
+  }
+
   const steps = document.querySelector("[data-install-steps]");
-  const planSteps = data.latest_plan?.steps || ["扫描空闲磁盘", "生成安装计划", "等待执行安装器"];
+  const planStages = data.latest_run?.stages || data.latest_plan?.stages;
+  const planSteps = planStages || (data.latest_plan?.steps || ["扫描空闲磁盘", "生成安装计划", "等待执行安装器"]).map((label) => ({ label, status: "pending" }));
   if (steps) {
-    steps.innerHTML = planSteps.map((step, index) => `<li><span>${index + 1}</span>${escapeHtml(step)}</li>`).join("");
+    steps.innerHTML = planSteps.map((step, index) => `<li class="${escapeHtml(step.status || "pending")}"><span>${index + 1}</span>${escapeHtml(step.label || step)}</li>`).join("");
+  }
+
+  const partitions = document.querySelector("[data-install-partitions]");
+  const partitionItems = data.latest_plan?.partitions || [];
+  if (partitions) {
+    partitions.innerHTML = partitionItems.length
+      ? partitionItems.map((item) => `<div><span>${escapeHtml(item.name)}</span><strong>${escapeHtml(item.size_label)}</strong><small>${escapeHtml(item.filesystem)} · ${escapeHtml(item.mountpoint)}</small></div>`).join("")
+      : '<div><span>等待计划</span><strong>--</strong><small>生成安装计划后显示布局</small></div>';
+  }
+
+  const run = document.querySelector("[data-install-run]");
+  const latestRun = data.latest_run;
+  if (run) {
+    run.innerHTML = latestRun
+      ? `<span>${escapeHtml(latestRun.status || "unknown")}</span><strong>${escapeHtml(latestRun.status_label || "已记录")}</strong><small>${escapeHtml(latestRun.target || "--")} · ${escapeHtml(latestRun.started_at || "")}</small>`
+      : '<span>未执行</span><strong>等待安装检查</strong><small>执行前需要确认短语与安全开关。</small>';
   }
 
   const events = document.querySelector("[data-install-events]");
   if (events) {
-    const items = (data.events || []).slice(-5).reverse();
+    const items = (data.events || []).slice(-6).reverse();
     events.innerHTML = items.length
       ? items.map((item) => `<li><span>${escapeHtml(item.level)}</span>${escapeHtml(item.message)}</li>`).join("")
       : '<li><span>idle</span>等待安装计划</li>';

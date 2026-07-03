@@ -24,8 +24,11 @@ CONFIG_DIR = Path(os.environ.get("LINGYUE_CONFIG_DIR") or (Path(STATIC_DIR) / ".
 SETUP_FILE = CONFIG_DIR / "setup.json"
 STORAGE_FILE = CONFIG_DIR / "storage.json"
 INSTALL_FILE = CONFIG_DIR / "install.json"
+INSTALL_MANIFEST_DIR = CONFIG_DIR / "install-manifests"
+INSTALL_RUN_DIR = CONFIG_DIR / "install-runs"
 INSTALL_SCRIPT = Path(os.environ.get("LINGYUE_INSTALL_SCRIPT", "/usr/local/sbin/lingyue-install-disk"))
 INSTALL_EXECUTION_ENABLED = os.environ.get("LINGYUE_INSTALL_EXECUTE") == "1"
+INSTALL_MIN_SIZE = 16 * 1024**3
 SHARE_ROOT = Path(os.environ.get("LINGYUE_SHARE_ROOT") or (CONFIG_DIR / "shares" if STATIC_DIR else "/srv/lingyue/shares"))
 SAMBA_MAIN = Path(os.environ.get("LINGYUE_SAMBA_MAIN") or (CONFIG_DIR / "samba/smb.conf" if STATIC_DIR else "/etc/samba/smb.conf"))
 SAMBA_SNIPPET = Path(os.environ.get("LINGYUE_SAMBA_SNIPPET") or (CONFIG_DIR / "samba/lingyue-shares.conf" if STATIC_DIR else "/etc/samba/smb.conf.d/lingyue-shares.conf"))
@@ -98,6 +101,7 @@ def load_install_state():
         "plans": data.get("plans") if isinstance(data.get("plans"), list) else [],
         "events": data.get("events") if isinstance(data.get("events"), list) else [],
         "runs": data.get("runs") if isinstance(data.get("runs"), list) else [],
+        "manifests": data.get("manifests") if isinstance(data.get("manifests"), list) else [],
     }
 
 
@@ -114,6 +118,15 @@ def append_install_event(state, level, message):
     events = state.get("events") if isinstance(state.get("events"), list) else []
     events.append({"at": utc_now(), "level": level, "message": message})
     state["events"] = events[-20:]
+
+
+def write_json_file(path, data, mode=0o600):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    try:
+        os.chmod(path, mode)
+    except OSError:
+        pass
 
 
 def share_name_to_slug(name):
@@ -698,7 +711,46 @@ def create_pool_plan(payload):
 
 def installer_target_candidates():
     disks = storage_overview()["disks"]
-    return [disk for disk in disks if disk.get("role") == "available" and disk.get("size", 0) >= 16 * 1024**3]
+    return [disk for disk in disks if disk.get("role") == "available" and disk.get("size", 0) >= INSTALL_MIN_SIZE]
+
+
+def install_stage_template(status="pending"):
+    return [
+        {"id": "validate-target", "label": "校验目标磁盘", "status": status},
+        {"id": "partition-layout", "label": "规划 EFI、系统和数据分区", "status": status},
+        {"id": "format-filesystems", "label": "准备文件系统", "status": status},
+        {"id": "deploy-system", "label": "写入凌岳OS 系统文件", "status": status},
+        {"id": "configure-boot", "label": "配置引导和首启服务", "status": status},
+        {"id": "finalize", "label": "生成安装报告", "status": status},
+    ]
+
+
+def partition_device_name(target, number):
+    separator = "p" if re.search(r"(nvme\d+n\d+|mmcblk\d+|loop\d+)$", target) else ""
+    return f"{target}{separator}{number}"
+
+
+def install_partitions_for(target):
+    return [
+        {"name": "EFI", "device": partition_device_name(target, 1), "size_label": "512 MB", "filesystem": "FAT32", "mountpoint": "/boot/efi"},
+        {"name": "System", "device": partition_device_name(target, 2), "size_label": "12 GB", "filesystem": "Btrfs", "mountpoint": "/"},
+        {"name": "Data Reserve", "device": partition_device_name(target, 3), "size_label": "剩余空间", "filesystem": "Btrfs", "mountpoint": "/srv/lingyue"},
+    ]
+
+
+def install_manifest_path(plan_id):
+    safe_id = re.sub(r"[^A-Za-z0-9_-]+", "-", str(plan_id)).strip("-") or "install-plan"
+    return INSTALL_MANIFEST_DIR / f"{safe_id}.json"
+
+
+def install_run_path(run_id):
+    safe_id = re.sub(r"[^A-Za-z0-9_-]+", "-", str(run_id)).strip("-") or "install-run"
+    return INSTALL_RUN_DIR / f"{safe_id}.json"
+
+
+def target_still_candidate(plan):
+    candidates = installer_target_candidates()
+    return next((disk for disk in candidates if disk.get("path") == plan.get("target") or disk.get("name") == plan.get("target_name")), None)
 
 
 def install_overview():
@@ -717,8 +769,10 @@ def install_overview():
         "minimum_size_label": "16 GB",
         "targets": candidates,
         "latest_plan": latest_plan,
+        "latest_run": state["runs"][-1] if state["runs"] else None,
         "events": state["events"],
         "runs": state["runs"],
+        "manifests": state["manifests"],
         "execution_enabled": INSTALL_EXECUTION_ENABLED,
         "installer_available": INSTALL_SCRIPT.exists(),
         "warnings": [
@@ -736,14 +790,44 @@ def create_install_plan(payload):
     if not selected:
         return None, {"target": "请选择一块未挂载且不低于 16 GB 的空闲磁盘。"}
 
+    plan_id = f"install-{int(time.time())}"
+    manifest = {
+        "schema": 1,
+        "product": "Lingyue OS",
+        "plan_id": plan_id,
+        "created_at": utc_now(),
+        "target": {
+            "path": selected["path"],
+            "name": selected["name"],
+            "size": selected.get("size", 0),
+            "size_label": selected["size_label"],
+            "model": selected.get("model") or "未知型号",
+            "transport": selected.get("transport") or "system",
+        },
+        "layout": {
+            "partition_table": "gpt",
+            "partitions": install_partitions_for(selected["path"]),
+        },
+        "safety": {
+            "requires_confirmation": "INSTALL-LINGYUE",
+            "execution_enabled": INSTALL_EXECUTION_ENABLED,
+            "destructive_write_default": False,
+        },
+    }
+    manifest_path = install_manifest_path(plan_id)
+    write_json_file(manifest_path, manifest)
+
     plan = {
-        "id": f"install-{int(time.time())}",
+        "id": plan_id,
         "target": selected["path"],
         "target_name": selected["name"],
         "target_size_label": selected["size_label"],
+        "manifest_path": str(manifest_path),
+        "partitions": manifest["layout"]["partitions"],
+        "stages": install_stage_template(),
         "status": "planned",
         "status_label": "待执行",
-        "created_at": utc_now(),
+        "created_at": manifest["created_at"],
         "steps": [
             "校验目标磁盘仍为空闲状态",
             "创建 EFI、系统和数据保留分区",
@@ -754,6 +838,7 @@ def create_install_plan(payload):
     }
     state = load_install_state()
     state["plans"] = [plan]
+    state["manifests"] = [{"plan_id": plan_id, "path": str(manifest_path), "created_at": manifest["created_at"]}]
     append_install_event(state, "info", f"已生成安装计划，目标 {selected['path']}。")
     save_install_state(state)
     return plan, None
@@ -770,28 +855,45 @@ def execute_install_plan(payload):
         return None, {"confirm": "请输入确认短语 INSTALL-LINGYUE。"}
     if not INSTALL_SCRIPT.exists():
         return None, {"script": "安装脚本入口不存在。"}
+    if not target_still_candidate(plan):
+        append_install_event(state, "error", "目标磁盘状态已变化，安装执行已停止。")
+        save_install_state(state)
+        return None, {"target": "目标磁盘不再处于空闲可安装状态，请重新预检并生成计划。"}
 
+    run_id = f"run-{int(time.time())}"
     run = {
-        "id": f"run-{int(time.time())}",
+        "id": run_id,
         "plan_id": plan["id"],
         "target": plan["target"],
+        "manifest_path": plan.get("manifest_path"),
+        "run_path": str(install_run_path(run_id)),
         "started_at": utc_now(),
         "status": "blocked",
         "status_label": "安全模式已阻止",
+        "stages": install_stage_template("blocked"),
     }
 
     if not INSTALL_EXECUTION_ENABLED:
         append_install_event(state, "warn", "安装执行被安全模式阻止，未写入磁盘。")
+        write_json_file(install_run_path(run_id), run)
         state["runs"] = [run]
         save_install_state(state)
         return {**run, "message": "安全模式已阻止执行。设置 LINGYUE_INSTALL_EXECUTE=1 后才允许脚本进入真实执行路径。"}, None
 
-    code, output, error = run_command_result([str(INSTALL_SCRIPT), "--target", plan["target"], "--plan", plan["id"]])
+    code, output, error = run_command_result([
+        str(INSTALL_SCRIPT),
+        "--target", plan["target"],
+        "--plan", plan["id"],
+        "--manifest", str(plan.get("manifest_path") or install_manifest_path(plan["id"])),
+        "--run", str(install_run_path(run_id)),
+    ])
     run["status"] = "completed" if code == 0 else "failed"
     run["status_label"] = "执行完成" if code == 0 else "执行失败"
     run["finished_at"] = utc_now()
     run["output"] = output[-2000:]
     run["error"] = error[-2000:]
+    run["stages"] = install_stage_template("completed" if code == 0 else "failed")
+    write_json_file(install_run_path(run_id), run)
     append_install_event(state, "info" if code == 0 else "error", run["status_label"])
     state["runs"] = [run]
     save_install_state(state)

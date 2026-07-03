@@ -3,6 +3,8 @@ set -euo pipefail
 
 target=""
 plan=""
+manifest=""
+run_file=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -14,6 +16,14 @@ while [[ $# -gt 0 ]]; do
       plan="${2:-}"
       shift 2
       ;;
+    --manifest)
+      manifest="${2:-}"
+      shift 2
+      ;;
+    --run)
+      run_file="${2:-}"
+      shift 2
+      ;;
     *)
       echo "Unknown argument: $1" >&2
       exit 2
@@ -22,15 +32,57 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ -z "$target" || -z "$plan" ]]; then
-  echo "Usage: lingyue-install-disk --target /dev/sdX --plan install-id" >&2
+  echo "Usage: lingyue-install-disk --target /dev/sdX --plan install-id [--manifest path] [--run path]" >&2
   exit 2
+fi
+
+started_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+if [[ ! -b "$target" ]]; then
+  echo "Target is not a block device: $target" >&2
+  exit 3
+fi
+
+if lsblk -nr -o MOUNTPOINT "$target" | grep -q '[^[:space:]]'; then
+  echo "Target has mounted filesystems and cannot be installed safely: $target" >&2
+  exit 4
+fi
+
+if [[ -n "$manifest" && ! -f "$manifest" ]]; then
+  echo "Manifest does not exist: $manifest" >&2
+  exit 5
+fi
+
+if [[ -n "$run_file" ]]; then
+  mkdir -p "$(dirname "$run_file")"
+  cat >"$run_file" <<JSON
+{
+  "plan_id": "$plan",
+  "target": "$target",
+  "manifest_path": "$manifest",
+  "started_at": "$started_at",
+  "status": "validated",
+  "status_label": "已完成安装前校验",
+  "stages": [
+    {"id": "validate-target", "label": "校验目标磁盘", "status": "completed"},
+    {"id": "partition-layout", "label": "规划 EFI、系统和数据分区", "status": "pending"},
+    {"id": "format-filesystems", "label": "准备文件系统", "status": "pending"},
+    {"id": "deploy-system", "label": "写入凌岳OS 系统文件", "status": "pending"},
+    {"id": "configure-boot", "label": "配置引导和首启服务", "status": "pending"},
+    {"id": "finalize", "label": "生成安装报告", "status": "pending"}
+  ]
+}
+JSON
 fi
 
 cat <<MSG
 Lingyue OS installer scaffold
 Plan: $plan
 Target: $target
+Manifest: ${manifest:-not provided}
+Run file: ${run_file:-not provided}
 
-The destructive installer is not implemented in this alpha build.
+Validated target block device and manifest inputs.
+The destructive installer is still guarded in this alpha build.
 No partition table, filesystem, bootloader, or system files were written.
 MSG
