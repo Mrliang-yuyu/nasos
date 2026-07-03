@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import json
 import hashlib
+import hmac
 import os
 import grp
 import re
@@ -10,6 +11,7 @@ import subprocess
 import time
 import mimetypes
 import secrets
+from http.cookies import SimpleCookie
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -24,11 +26,14 @@ CONFIG_DIR = Path(os.environ.get("LINGYUE_CONFIG_DIR") or (Path(STATIC_DIR) / ".
 SETUP_FILE = CONFIG_DIR / "setup.json"
 STORAGE_FILE = CONFIG_DIR / "storage.json"
 INSTALL_FILE = CONFIG_DIR / "install.json"
+SESSION_FILE = CONFIG_DIR / "sessions.json"
 INSTALL_MANIFEST_DIR = CONFIG_DIR / "install-manifests"
 INSTALL_RUN_DIR = CONFIG_DIR / "install-runs"
 INSTALL_SCRIPT = Path(os.environ.get("LINGYUE_INSTALL_SCRIPT", "/usr/local/sbin/lingyue-install-disk"))
 INSTALL_EXECUTION_ENABLED = os.environ.get("LINGYUE_INSTALL_EXECUTE") == "1"
 INSTALL_MIN_SIZE = 16 * 1024**3
+SESSION_COOKIE = "lyos_session"
+SESSION_TTL_SECONDS = 12 * 60 * 60
 SHARE_ROOT = Path(os.environ.get("LINGYUE_SHARE_ROOT") or (CONFIG_DIR / "shares" if STATIC_DIR else "/srv/lingyue/shares"))
 SAMBA_MAIN = Path(os.environ.get("LINGYUE_SAMBA_MAIN") or (CONFIG_DIR / "samba/smb.conf" if STATIC_DIR else "/etc/samba/smb.conf"))
 SAMBA_SNIPPET = Path(os.environ.get("LINGYUE_SAMBA_SNIPPET") or (CONFIG_DIR / "samba/lingyue-shares.conf" if STATIC_DIR else "/etc/samba/smb.conf.d/lingyue-shares.conf"))
@@ -127,6 +132,35 @@ def write_json_file(path, data, mode=0o600):
         os.chmod(path, mode)
     except OSError:
         pass
+
+
+def load_session_state():
+    try:
+        data = json.loads(SESSION_FILE.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        data = {}
+
+    sessions = data.get("sessions") if isinstance(data.get("sessions"), dict) else {}
+    now = time.time()
+    active = {
+        token: session for token, session in sessions.items()
+        if isinstance(session, dict) and float(session.get("expires_at", 0) or 0) > now
+    }
+    if active != sessions:
+        save_session_state({"sessions": active})
+    return {"sessions": active}
+
+
+def save_session_state(data):
+    write_json_file(SESSION_FILE, data)
+
+
+def load_setup_private():
+    try:
+        data = json.loads(SETUP_FILE.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        data = {}
+    return data
 
 
 def share_name_to_slug(name):
@@ -392,10 +426,7 @@ def create_share(payload):
 
 
 def load_setup():
-    try:
-        data = json.loads(SETUP_FILE.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        data = {}
+    data = load_setup_private()
 
     return {
         "completed": bool(data.get("completed")),
@@ -413,6 +444,73 @@ def password_hash(password):
     salt = secrets.token_hex(16)
     digest = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt.encode("utf-8"), 180000)
     return {"salt": salt, "hash": digest.hex(), "algorithm": "pbkdf2_sha256"}
+
+
+def verify_password(password, stored):
+    if not isinstance(stored, dict) or stored.get("algorithm") != "pbkdf2_sha256":
+        return False
+    salt = str(stored.get("salt") or "")
+    expected = str(stored.get("hash") or "")
+    if not salt or not expected:
+        return False
+    digest = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt.encode("utf-8"), 180000).hex()
+    return hmac.compare_digest(digest, expected)
+
+
+def create_session(username):
+    token = secrets.token_urlsafe(32)
+    now = time.time()
+    state = load_session_state()
+    state["sessions"][token] = {
+        "username": username,
+        "created_at": now,
+        "expires_at": now + SESSION_TTL_SECONDS,
+    }
+    save_session_state(state)
+    return token, state["sessions"][token]
+
+
+def destroy_session(token):
+    if not token:
+        return
+    state = load_session_state()
+    if token in state["sessions"]:
+        del state["sessions"][token]
+        save_session_state(state)
+
+
+def session_from_token(token):
+    if not token:
+        return None
+    session = load_session_state()["sessions"].get(token)
+    if not session:
+        return None
+    return {"authenticated": True, "username": session.get("username"), "expires_at": session.get("expires_at")}
+
+
+def login(payload):
+    setup = load_setup_private()
+    if not setup.get("completed"):
+        return None, {"setup": "请先完成初始化。"}
+
+    username = str(payload.get("username") or "").strip()
+    password = str(payload.get("password") or "")
+    if username != setup.get("admin_username") or not verify_password(password, setup.get("password")):
+        return None, {"login": "管理员账号或密码不正确。"}
+
+    token, session = create_session(username)
+    return {"token": token, "session": {"authenticated": True, "username": username, "expires_at": session["expires_at"]}}, None
+
+
+def public_session_payload(session=None):
+    setup = load_setup()
+    return {
+        "authenticated": bool(session),
+        "username": session.get("username") if session else None,
+        "expires_at": session.get("expires_at") if session else None,
+        "setup_completed": setup["completed"],
+        "admin_username": setup["admin_username"],
+    }
 
 
 def validate_setup(payload):
@@ -978,6 +1076,26 @@ def overview():
 
 
 class Handler(BaseHTTPRequestHandler):
+    def session_token(self):
+        cookie_header = self.headers.get("Cookie") or ""
+        cookie = SimpleCookie()
+        try:
+            cookie.load(cookie_header)
+        except Exception:
+            return ""
+        morsel = cookie.get(SESSION_COOKIE)
+        return morsel.value if morsel else ""
+
+    def current_session(self):
+        return session_from_token(self.session_token())
+
+    def require_auth(self):
+        session = self.current_session()
+        if session:
+            return session
+        self.send_json({"ok": False, "error": "请先登录管理员账号。", "auth_required": True}, status=401)
+        return None
+
     def do_OPTIONS(self):
         self.send_response(204)
         self.send_cors_headers()
@@ -1005,6 +1123,9 @@ class Handler(BaseHTTPRequestHandler):
         if parsed.path == "/api/setup/state":
             self.send_json(load_setup())
             return
+        if parsed.path == "/api/auth/session":
+            self.send_json(public_session_payload(self.current_session()))
+            return
         if parsed.path == "/api/system/overview":
             self.send_json(overview())
             return
@@ -1026,7 +1147,16 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         parsed = urlparse(self.path)
-        if parsed.path not in {"/api/setup/complete", "/api/storage/pools/plan", "/api/install/plan", "/api/install/execute", "/api/shares/create"}:
+        allowed_paths = {
+            "/api/setup/complete",
+            "/api/auth/login",
+            "/api/auth/logout",
+            "/api/storage/pools/plan",
+            "/api/install/plan",
+            "/api/install/execute",
+            "/api/shares/create",
+        }
+        if parsed.path not in allowed_paths:
             self.send_response(404)
             self.end_headers()
             return
@@ -1038,13 +1168,32 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json({"ok": False, "error": "请求格式无效。"}, status=400)
             return
 
+        if parsed.path == "/api/auth/login":
+            result, errors = login(payload)
+            if errors:
+                self.send_json({"ok": False, "errors": errors}, status=401)
+                return
+            self.send_json({"ok": True, "session": result["session"]}, extra_headers=[self.session_cookie_header(result["token"])])
+            return
+
+        if parsed.path == "/api/auth/logout":
+            destroy_session(self.session_token())
+            self.send_json({"ok": True}, extra_headers=[self.session_cookie_header("", expired=True)])
+            return
+
         if parsed.path == "/api/setup/complete":
+            if load_setup()["completed"] and not self.require_auth():
+                return
             setup, errors = complete_setup(payload)
             if errors:
                 self.send_json({"ok": False, "errors": errors}, status=400)
                 return
+            result, _ = login({"username": payload.get("admin_username"), "password": payload.get("admin_password")})
+            headers = [self.session_cookie_header(result["token"])] if result else []
+            self.send_json({"ok": True, "setup": setup, "session": result["session"] if result else None}, extra_headers=headers)
+            return
 
-            self.send_json({"ok": True, "setup": setup})
+        if not self.require_auth():
             return
 
         if parsed.path == "/api/storage/pools/plan":
@@ -1113,12 +1262,19 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
 
-    def send_json(self, payload, status=200):
+    def session_cookie_header(self, token, expired=False):
+        max_age = 0 if expired else SESSION_TTL_SECONDS
+        value = token if token else "deleted"
+        return ("Set-Cookie", f"{SESSION_COOKIE}={value}; Path=/; HttpOnly; SameSite=Lax; Max-Age={max_age}")
+
+    def send_json(self, payload, status=200, extra_headers=None):
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Cache-Control", "no-store")
         self.send_cors_headers()
+        for key, value in extra_headers or []:
+            self.send_header(key, value)
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)

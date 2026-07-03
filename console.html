@@ -83,6 +83,32 @@
     </section>
   </div>
 
+  <div class="auth-overlay" data-auth-overlay hidden>
+    <section class="auth-dialog" aria-labelledby="auth-title">
+      <div class="setup-head">
+        <span class="kicker">Admin Access</span>
+        <h2 id="auth-title">登录凌岳OS</h2>
+        <p>使用初始化时创建的管理员账号继续管理存储、共享和安装器。</p>
+      </div>
+
+      <form class="auth-form" data-auth-form>
+        <label>
+          <span>管理员账号</span>
+          <input name="username" autocomplete="username" />
+        </label>
+        <label>
+          <span>管理员密码</span>
+          <input name="password" type="password" autocomplete="current-password" />
+        </label>
+        <p class="setup-error" data-auth-error hidden></p>
+        <div class="setup-actions">
+          <button type="button" data-auth-cancel>稍后</button>
+          <button type="submit" class="avatar">登录</button>
+        </div>
+      </form>
+    </section>
+  </div>
+
   <div class="app-shell">
     <aside class="sidebar" aria-label="凌岳OS 主导航">
       <a class="brand" href="index.html" aria-label="返回凌岳OS 官网">
@@ -119,7 +145,7 @@
         <div class="topbar-actions">
           <button type="button">通知</button>
           <button type="button">任务</button>
-          <button type="button" class="avatar" data-admin-name>Admin</button>
+          <button type="button" class="avatar" data-auth-button data-admin-name>Admin</button>
         </div>
       </header>
 
@@ -171,7 +197,7 @@
             <h2>存储管理</h2>
           </div>
           <div class="section-actions">
-            <button type="button" data-create-pool>创建存储池规划</button>
+            <button type="button" data-create-pool data-auth-required>创建存储池规划</button>
             <button type="button" data-refresh-storage>重新扫描</button>
           </div>
         </div>
@@ -230,7 +256,7 @@
             <h2>共享与权限</h2>
           </div>
           <div class="section-actions">
-            <button type="button" data-create-share>新建认证共享</button>
+            <button type="button" data-create-share data-auth-required>新建认证共享</button>
             <button type="button" data-refresh-shares>刷新状态</button>
           </div>
         </div>
@@ -292,8 +318,8 @@
             <h2>系统安装</h2>
           </div>
           <div class="section-actions">
-            <button type="button" data-execute-install>执行安装检查</button>
-            <button type="button" data-create-install-plan>生成安装计划</button>
+            <button type="button" data-execute-install data-auth-required>执行安装检查</button>
+            <button type="button" data-create-install-plan data-auth-required>生成安装计划</button>
             <button type="button" data-refresh-install>重新预检</button>
           </div>
         </div>

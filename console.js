@@ -8,6 +8,7 @@ let latestOverview = null;
 let latestStorage = null;
 let latestShares = null;
 let latestInstall = null;
+let authSession = { authenticated: false, admin_username: "admin" };
 
 function text(selector, value) {
   const node = document.querySelector(selector);
@@ -29,6 +30,47 @@ function showActionNote(selector, message, isError = false) {
   node.textContent = message || "";
   node.hidden = !message;
   node.classList.toggle("error", isError);
+}
+
+function showAuthError(message) {
+  const node = document.querySelector("[data-auth-error]");
+  if (!node) return;
+  node.textContent = message || "请检查登录信息。";
+  node.hidden = !message;
+}
+
+function setAuthOverlay(visible) {
+  const overlay = document.querySelector("[data-auth-overlay]");
+  if (!overlay) return;
+  overlay.hidden = !visible;
+  if (visible) {
+    const username = overlay.querySelector('input[name="username"]');
+    if (username && !username.value) username.value = authSession.admin_username || "admin";
+    overlay.querySelector('input[name="password"]')?.focus();
+  }
+}
+
+function updateAuthUI() {
+  const authenticated = Boolean(authSession?.authenticated);
+  const username = authSession?.username || authSession?.admin_username || "Admin";
+  text("[data-admin-name]", authenticated ? username : "登录");
+  document.querySelectorAll("[data-auth-required]").forEach((button) => {
+    button.disabled = !authenticated;
+    button.title = authenticated ? "" : "请先登录管理员账号";
+  });
+}
+
+async function parseApiResponse(response, fallbackMessage) {
+  const result = await response.json();
+  if (response.status === 401 || result.auth_required) {
+    setAuthOverlay(true);
+    throw new Error(result.error || "请先登录管理员账号。");
+  }
+  if (!response.ok || !result.ok) {
+    const firstError = result.errors ? Object.values(result.errors)[0] : result.error;
+    throw new Error(firstError || fallbackMessage);
+  }
+  return result;
 }
 
 function escapeHtml(value) {
@@ -226,7 +268,8 @@ function renderOverview(data) {
   const health = data.health || {};
 
   text("[data-device-name]", data.system?.name || "LY-NAS");
-  text("[data-admin-name]", data.setup?.admin_username || "Admin");
+  authSession.admin_username = data.setup?.admin_username || authSession.admin_username || "admin";
+  updateAuthUI();
   text("[data-console-subtitle]", data.setup?.completed ? "控制台" : "等待初始化");
   text("[data-sidebar-health]", health.label || stateText[health.state] || "运行正常");
   text("[data-hero-title]", `你的私有数据中心${health.label || "运行正常"}`);
@@ -316,11 +359,9 @@ async function completeSetup(event) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(setupPayload()),
     });
-    const result = await response.json();
-    if (!response.ok || !result.ok) {
-      const firstError = result.errors ? Object.values(result.errors)[0] : result.error;
-      throw new Error(firstError || "初始化失败。请稍后重试。");
-    }
+    const result = await parseApiResponse(response, "初始化失败。请稍后重试。");
+    if (result.session) authSession = { ...authSession, ...result.session, authenticated: true };
+    updateAuthUI();
 
     document.querySelector("[data-setup-overlay]")?.setAttribute("hidden", "");
     await loadOverview();
@@ -344,6 +385,67 @@ async function loadSetupState() {
   } catch (error) {
     // Static preview keeps the console usable even when the API is not running.
   }
+}
+
+async function loadAuthSession() {
+  try {
+    const response = await fetch("/api/auth/session", { cache: "no-store" });
+    if (!response.ok) throw new Error("auth api unavailable");
+    authSession = await response.json();
+    updateAuthUI();
+  } catch (error) {
+    updateAuthUI();
+  }
+}
+
+async function loginAdmin(event) {
+  event.preventDefault();
+  showAuthError("");
+  const form = event.currentTarget;
+  const formData = new FormData(form);
+
+  try {
+    const response = await fetch("/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        username: String(formData.get("username") || "").trim(),
+        password: String(formData.get("password") || ""),
+      }),
+    });
+    const result = await parseApiResponse(response, "登录失败。");
+    authSession = { ...authSession, ...result.session, authenticated: true };
+    form.reset();
+    setAuthOverlay(false);
+    updateAuthUI();
+  } catch (error) {
+    showAuthError(error.message);
+  }
+}
+
+async function logoutAdmin() {
+  try {
+    await fetch("/api/auth/logout", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+  } catch (error) {
+    // Local UI state still clears if the API is unavailable.
+  }
+  authSession = { ...authSession, authenticated: false, username: null };
+  updateAuthUI();
+}
+
+function bindAuthActions() {
+  document.querySelector("[data-auth-form]")?.addEventListener("submit", loginAdmin);
+  document.querySelector("[data-auth-cancel]")?.addEventListener("click", () => {
+    showAuthError("");
+    setAuthOverlay(false);
+  });
+  document.querySelector("[data-auth-button]")?.addEventListener("click", () => {
+    if (authSession?.authenticated) {
+      logoutAdmin();
+    } else {
+      setAuthOverlay(true);
+    }
+  });
 }
 
 function bindSetupWizard() {
@@ -427,11 +529,7 @@ async function createPoolPlan() {
         disk_names: recommendation.disk_names,
       }),
     });
-    const result = await response.json();
-    if (!response.ok || !result.ok) {
-      const firstError = result.errors ? Object.values(result.errors)[0] : result.error;
-      throw new Error(firstError || "创建规划失败。");
-    }
+    await parseApiResponse(response, "创建规划失败。");
 
     showActionNote("[data-storage-action-note]", "已生成存储池规划。当前版本不会格式化磁盘，后续会加入二次确认和执行日志。");
     await loadStorageOverview();
@@ -458,11 +556,7 @@ async function createInstallPlan() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ target }),
     });
-    const result = await response.json();
-    if (!response.ok || !result.ok) {
-      const firstError = result.errors ? Object.values(result.errors)[0] : result.error;
-      throw new Error(firstError || "安装计划生成失败。");
-    }
+    const result = await parseApiResponse(response, "安装计划生成失败。");
 
     showActionNote("[data-install-action-note]", `已生成安装计划，目标：${result.plan.target}。当前不会写入磁盘。`);
     await loadInstallOverview();
@@ -478,11 +572,7 @@ async function executeInstallPlan() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ confirm: "INSTALL-LINGYUE" }),
     });
-    const result = await response.json();
-    if (!response.ok || !result.ok) {
-      const firstError = result.errors ? Object.values(result.errors)[0] : result.error;
-      throw new Error(firstError || "安装执行失败。");
-    }
+    const result = await parseApiResponse(response, "安装执行失败。");
 
     showActionNote("[data-install-action-note]", result.run.message || result.run.status_label, result.run.status !== "completed");
     await loadInstallOverview();
@@ -504,11 +594,7 @@ async function createPublicShare() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name: "Public", access: "authenticated_rw" }),
     });
-    const result = await response.json();
-    if (!response.ok || !result.ok) {
-      const firstError = result.errors ? Object.values(result.errors)[0] : result.error;
-      throw new Error(firstError || "共享创建失败。");
-    }
+    const result = await parseApiResponse(response, "共享创建失败。");
 
     const warning = result.share?.service_warning ? ` ${result.share.service_warning}` : "";
     showActionNote("[data-share-action-note]", `Public 认证共享已创建，使用初始化管理员账号访问。路径：${result.share.path}。${warning}`.trim(), Boolean(warning));
@@ -526,9 +612,12 @@ function bindShareActions() {
 
 document.addEventListener("DOMContentLoaded", async () => {
   bindSetupWizard();
+  bindAuthActions();
   bindStorageActions();
   bindInstallActions();
   bindShareActions();
+  updateAuthUI();
+  await loadAuthSession();
   await loadOverview();
   await loadStorageOverview();
   await loadInstallOverview();
