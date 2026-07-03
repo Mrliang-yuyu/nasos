@@ -31,6 +31,10 @@ INSTALL_MANIFEST_DIR = CONFIG_DIR / "install-manifests"
 INSTALL_RUN_DIR = CONFIG_DIR / "install-runs"
 INSTALL_SCRIPT = Path(os.environ.get("LINGYUE_INSTALL_SCRIPT", "/usr/local/sbin/lingyue-install-disk"))
 INSTALL_EXECUTION_ENABLED = os.environ.get("LINGYUE_INSTALL_EXECUTE") == "1"
+STORAGE_MANIFEST_DIR = CONFIG_DIR / "storage-manifests"
+STORAGE_RUN_DIR = CONFIG_DIR / "storage-runs"
+STORAGE_POOL_SCRIPT = Path(os.environ.get("LINGYUE_STORAGE_POOL_SCRIPT", "/usr/local/sbin/lingyue-create-pool"))
+STORAGE_EXECUTION_ENABLED = os.environ.get("LINGYUE_STORAGE_EXECUTE") == "1"
 INSTALL_MIN_SIZE = 16 * 1024**3
 SESSION_COOKIE = "lyos_session"
 SESSION_TTL_SECONDS = 12 * 60 * 60
@@ -84,6 +88,9 @@ def load_storage_state():
     return {
         "pool_plans": data.get("pool_plans") if isinstance(data.get("pool_plans"), list) else [],
         "shares": data.get("shares") if isinstance(data.get("shares"), list) else [],
+        "events": data.get("events") if isinstance(data.get("events"), list) else [],
+        "runs": data.get("runs") if isinstance(data.get("runs"), list) else [],
+        "manifests": data.get("manifests") if isinstance(data.get("manifests"), list) else [],
     }
 
 
@@ -94,6 +101,12 @@ def save_storage_state(data):
         os.chmod(STORAGE_FILE, 0o600)
     except OSError:
         pass
+
+
+def append_storage_event(state, level, message):
+    events = state.get("events") if isinstance(state.get("events"), list) else []
+    events.append({"at": utc_now(), "level": level, "message": message})
+    state["events"] = events[-20:]
 
 
 def load_install_state():
@@ -738,7 +751,17 @@ def storage_overview():
         },
         "pools": state["pool_plans"],
         "shares": state["shares"],
+        "latest_run": state["runs"][-1] if state["runs"] else None,
+        "events": state["events"],
+        "runs": state["runs"],
+        "manifests": state["manifests"],
+        "execution_enabled": STORAGE_EXECUTION_ENABLED,
+        "pool_script_available": STORAGE_POOL_SCRIPT.exists(),
         "recommendation": pool_recommendation(candidates),
+        "warnings": [
+            "默认安全模式不会格式化、挂载或写入磁盘。",
+            "只有显式启用存储池执行开关后，脚本才会进入真实执行路径。",
+        ],
     }
 
 
@@ -768,6 +791,33 @@ def pool_recommendation(candidates):
     }
 
 
+def pool_stage_template(status="pending"):
+    return [
+        {"id": "validate-disks", "label": "校验目标磁盘", "status": status},
+        {"id": "prepare-mountpoint", "label": "准备挂载目录", "status": status},
+        {"id": "create-filesystem", "label": "创建 Btrfs 存储池", "status": status},
+        {"id": "mount-pool", "label": "挂载数据池", "status": status},
+        {"id": "register-pool", "label": "写入系统记录", "status": status},
+    ]
+
+
+def storage_manifest_path(plan_id):
+    safe_id = re.sub(r"[^A-Za-z0-9_-]+", "-", str(plan_id)).strip("-") or "storage-plan"
+    return STORAGE_MANIFEST_DIR / f"{safe_id}.json"
+
+
+def storage_run_path(run_id):
+    safe_id = re.sub(r"[^A-Za-z0-9_-]+", "-", str(run_id)).strip("-") or "storage-run"
+    return STORAGE_RUN_DIR / f"{safe_id}.json"
+
+
+def pool_disks_still_candidates(plan):
+    names = set(plan.get("disk_names") or [])
+    candidates = [disk for disk in storage_overview()["disks"] if disk.get("pool_candidate")]
+    selected = [disk for disk in candidates if disk.get("name") in names or disk.get("path") in names]
+    return selected if len(selected) == len(names) else []
+
+
 def create_pool_plan(payload):
     name = str(payload.get("name") or "MainPool").strip()
     mode = str(payload.get("mode") or "mirror").strip()
@@ -789,22 +839,122 @@ def create_pool_plan(payload):
     plans = [plan for plan in state["pool_plans"] if plan.get("name") != name]
     selected_disks = [disk for disk in storage_overview()["disks"] if disk.get("name") in disk_names]
     raw_capacity = min((disk.get("size", 0) for disk in selected_disks), default=0) if mode == "mirror" else sum(disk.get("size", 0) for disk in selected_disks)
+    plan_id = f"pool-{int(time.time())}"
+    mountpoint = f"/srv/lingyue/pools/{name}"
+    manifest = {
+        "schema": 1,
+        "product": "Lingyue OS",
+        "plan_id": plan_id,
+        "created_at": utc_now(),
+        "pool": {
+            "name": name,
+            "mode": mode,
+            "filesystem": "btrfs",
+            "mountpoint": mountpoint,
+            "devices": [
+                {
+                    "name": disk["name"],
+                    "path": disk["path"],
+                    "size": disk.get("size", 0),
+                    "size_label": disk["size_label"],
+                    "model": disk.get("model") or "未知型号",
+                    "transport": disk.get("transport") or "system",
+                }
+                for disk in selected_disks
+            ],
+        },
+        "safety": {
+            "requires_confirmation": "CREATE-LINGYUE-POOL",
+            "execution_enabled": STORAGE_EXECUTION_ENABLED,
+            "destructive_write_default": False,
+        },
+    }
+    manifest_path = storage_manifest_path(plan_id)
+    write_json_file(manifest_path, manifest)
     plan = {
-        "id": f"pool-{int(time.time())}",
+        "id": plan_id,
         "name": name,
         "mode": mode,
         "mode_label": "Btrfs Mirror" if mode == "mirror" else "Btrfs Single",
         "disk_names": disk_names,
+        "disk_paths": [disk["path"] for disk in selected_disks],
+        "mountpoint": mountpoint,
+        "manifest_path": str(manifest_path),
+        "stages": pool_stage_template(),
         "capacity": raw_capacity,
         "capacity_label": format_bytes(raw_capacity),
         "status": "planned",
         "status_label": "待执行",
-        "created_at": utc_now(),
+        "created_at": manifest["created_at"],
     }
     plans.append(plan)
     state["pool_plans"] = plans
+    state["manifests"] = [{"plan_id": plan_id, "path": str(manifest_path), "created_at": manifest["created_at"]}]
+    append_storage_event(state, "info", f"已生成存储池规划 {name}。")
     save_storage_state(state)
     return plan, None
+
+
+def execute_pool_plan(payload):
+    confirm = str(payload.get("confirm") or "").strip()
+    state = load_storage_state()
+    plan = state["pool_plans"][-1] if state["pool_plans"] else None
+
+    if not plan:
+        return None, {"plan": "请先创建存储池规划。"}
+    if confirm != "CREATE-LINGYUE-POOL":
+        return None, {"confirm": "请输入确认短语 CREATE-LINGYUE-POOL。"}
+    if not STORAGE_POOL_SCRIPT.exists():
+        return None, {"script": "存储池脚本入口不存在。"}
+    if not pool_disks_still_candidates(plan):
+        append_storage_event(state, "error", "目标磁盘状态已变化，存储池执行已停止。")
+        save_storage_state(state)
+        return None, {"target": "目标磁盘不再处于空闲可规划状态，请重新扫描并创建规划。"}
+
+    run_id = f"pool-run-{int(time.time())}"
+    run = {
+        "id": run_id,
+        "plan_id": plan["id"],
+        "pool_name": plan["name"],
+        "mode": plan["mode"],
+        "disk_paths": plan.get("disk_paths") or [],
+        "mountpoint": plan.get("mountpoint"),
+        "manifest_path": plan.get("manifest_path"),
+        "run_path": str(storage_run_path(run_id)),
+        "started_at": utc_now(),
+        "status": "blocked",
+        "status_label": "安全模式已阻止",
+        "stages": pool_stage_template("blocked"),
+    }
+
+    if not STORAGE_EXECUTION_ENABLED:
+        append_storage_event(state, "warn", "存储池执行被安全模式阻止，未格式化或挂载磁盘。")
+        write_json_file(storage_run_path(run_id), run)
+        state["runs"] = [run]
+        save_storage_state(state)
+        return {**run, "message": "安全模式已阻止执行。设置 LINGYUE_STORAGE_EXECUTE=1 后才允许脚本进入真实执行路径。"}, None
+
+    code, output, error = run_command_result([
+        str(STORAGE_POOL_SCRIPT),
+        "--pool", plan["name"],
+        "--mode", plan["mode"],
+        "--devices", ",".join(plan.get("disk_paths") or []),
+        "--mountpoint", str(plan.get("mountpoint") or f"/srv/lingyue/pools/{plan['name']}"),
+        "--plan", plan["id"],
+        "--manifest", str(plan.get("manifest_path") or storage_manifest_path(plan["id"])),
+        "--run", str(storage_run_path(run_id)),
+    ])
+    run["status"] = "completed" if code == 0 else "failed"
+    run["status_label"] = "执行完成" if code == 0 else "执行失败"
+    run["finished_at"] = utc_now()
+    run["output"] = output[-2000:]
+    run["error"] = error[-2000:]
+    run["stages"] = pool_stage_template("completed" if code == 0 else "failed")
+    write_json_file(storage_run_path(run_id), run)
+    append_storage_event(state, "info" if code == 0 else "error", run["status_label"])
+    state["runs"] = [run]
+    save_storage_state(state)
+    return run, None
 
 
 def installer_target_candidates():
@@ -1152,6 +1302,7 @@ class Handler(BaseHTTPRequestHandler):
             "/api/auth/login",
             "/api/auth/logout",
             "/api/storage/pools/plan",
+            "/api/storage/pools/execute",
             "/api/install/plan",
             "/api/install/execute",
             "/api/shares/create",
@@ -1203,6 +1354,15 @@ class Handler(BaseHTTPRequestHandler):
                 return
 
             self.send_json({"ok": True, "pool": plan})
+            return
+
+        if parsed.path == "/api/storage/pools/execute":
+            run, errors = execute_pool_plan(payload)
+            if errors:
+                self.send_json({"ok": False, "errors": errors}, status=400)
+                return
+
+            self.send_json({"ok": True, "run": run})
             return
 
         if parsed.path == "/api/install/plan":

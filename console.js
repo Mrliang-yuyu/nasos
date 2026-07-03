@@ -130,15 +130,34 @@ function renderPoolList(pools) {
   `).join("");
 }
 
+function renderStorageRun(data) {
+  const run = document.querySelector("[data-storage-run]");
+  const latestRun = data.latest_run;
+  if (run) {
+    run.innerHTML = latestRun
+      ? `<span>${escapeHtml(latestRun.status || "unknown")}</span><strong>${escapeHtml(latestRun.status_label || "已记录")}</strong><small>${escapeHtml(latestRun.pool_name || "--")} · ${escapeHtml(latestRun.started_at || "")}</small>`
+      : '<span>未执行</span><strong>等待创建检查</strong><small>执行前需要确认短语与安全开关。</small>';
+  }
+
+  const events = document.querySelector("[data-storage-events]");
+  if (events) {
+    const items = (data.events || []).slice(-6).reverse();
+    events.innerHTML = items.length
+      ? items.map((item) => `<li><span>${escapeHtml(item.level)}</span>${escapeHtml(item.message)}</li>`).join("")
+      : '<li><span>idle</span>等待存储池规划</li>';
+  }
+}
+
 function renderStorageOverview(data) {
   latestStorage = data;
   renderDisks(data.disks || []);
   renderPoolList(data.pools || []);
+  renderStorageRun(data);
 
   text("[data-storage-disk-total]", `${data.summary?.total || 0} 块`);
   text("[data-storage-disk-available]", `${data.summary?.available || 0} 块`);
   text("[data-storage-recommendation]", data.recommendation?.label || "等待磁盘");
-  text("[data-storage-recommendation-capacity]", data.recommendation?.capacity_label || "--");
+  text("[data-storage-mode]", data.execution_enabled ? "可执行" : "安全模式");
 
   const badge = document.querySelector("[data-storage-scan-badge]");
   if (badge) {
@@ -531,7 +550,23 @@ async function createPoolPlan() {
     });
     await parseApiResponse(response, "创建规划失败。");
 
-    showActionNote("[data-storage-action-note]", "已生成存储池规划。当前版本不会格式化磁盘，后续会加入二次确认和执行日志。");
+    showActionNote("[data-storage-action-note]", "已生成存储池规划和执行清单。当前默认不会格式化磁盘。");
+    await loadStorageOverview();
+  } catch (error) {
+    showActionNote("[data-storage-action-note]", error.message, true);
+  }
+}
+
+async function executePoolPlan() {
+  try {
+    const response = await fetch("/api/storage/pools/execute", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ confirm: "CREATE-LINGYUE-POOL" }),
+    });
+    const result = await parseApiResponse(response, "存储池执行失败。");
+
+    showActionNote("[data-storage-action-note]", result.run.message || result.run.status_label, result.run.status !== "completed");
     await loadStorageOverview();
   } catch (error) {
     showActionNote("[data-storage-action-note]", error.message, true);
@@ -541,6 +576,7 @@ async function createPoolPlan() {
 function bindStorageActions() {
   document.querySelector("[data-refresh-storage]")?.addEventListener("click", loadStorageOverview);
   document.querySelector("[data-create-pool]")?.addEventListener("click", createPoolPlan);
+  document.querySelector("[data-execute-pool]")?.addEventListener("click", executePoolPlan);
 }
 
 async function createInstallPlan() {

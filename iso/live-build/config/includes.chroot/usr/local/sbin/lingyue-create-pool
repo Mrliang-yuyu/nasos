@@ -1,0 +1,126 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+pool=""
+mode=""
+devices_csv=""
+mountpoint=""
+plan=""
+manifest=""
+run_file=""
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --pool)
+      pool="${2:-}"
+      shift 2
+      ;;
+    --mode)
+      mode="${2:-}"
+      shift 2
+      ;;
+    --devices)
+      devices_csv="${2:-}"
+      shift 2
+      ;;
+    --mountpoint)
+      mountpoint="${2:-}"
+      shift 2
+      ;;
+    --plan)
+      plan="${2:-}"
+      shift 2
+      ;;
+    --manifest)
+      manifest="${2:-}"
+      shift 2
+      ;;
+    --run)
+      run_file="${2:-}"
+      shift 2
+      ;;
+    *)
+      echo "Unknown argument: $1" >&2
+      exit 2
+      ;;
+  esac
+done
+
+if [[ -z "$pool" || -z "$mode" || -z "$devices_csv" || -z "$mountpoint" || -z "$plan" ]]; then
+  echo "Usage: lingyue-create-pool --pool name --mode single|mirror --devices /dev/sdX,/dev/sdY --mountpoint path --plan pool-id [--manifest path] [--run path]" >&2
+  exit 2
+fi
+
+if [[ "$mode" != "single" && "$mode" != "mirror" ]]; then
+  echo "Unsupported pool mode: $mode" >&2
+  exit 2
+fi
+
+IFS=',' read -r -a devices <<<"$devices_csv"
+if [[ "${#devices[@]}" -eq 0 ]]; then
+  echo "No block devices were provided" >&2
+  exit 2
+fi
+
+if [[ "$mode" == "mirror" && "${#devices[@]}" -lt 2 ]]; then
+  echo "Mirror mode requires at least two devices" >&2
+  exit 2
+fi
+
+started_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+for device in "${devices[@]}"; do
+  if [[ ! -b "$device" ]]; then
+    echo "Device is not a block device: $device" >&2
+    exit 3
+  fi
+
+  if lsblk -nr -o MOUNTPOINT "$device" | grep -q '[^[:space:]]'; then
+    echo "Device has mounted filesystems and cannot be used safely: $device" >&2
+    exit 4
+  fi
+done
+
+if [[ -n "$manifest" && ! -f "$manifest" ]]; then
+  echo "Manifest does not exist: $manifest" >&2
+  exit 5
+fi
+
+if [[ -n "$run_file" ]]; then
+  mkdir -p "$(dirname "$run_file")"
+  cat >"$run_file" <<JSON
+{
+  "plan_id": "$plan",
+  "pool_name": "$pool",
+  "mode": "$mode",
+  "devices": "$devices_csv",
+  "mountpoint": "$mountpoint",
+  "manifest_path": "$manifest",
+  "started_at": "$started_at",
+  "status": "validated",
+  "status_label": "已完成存储池创建前校验",
+  "stages": [
+    {"id": "validate-disks", "label": "校验目标磁盘", "status": "completed"},
+    {"id": "prepare-mountpoint", "label": "准备挂载目录", "status": "pending"},
+    {"id": "create-filesystem", "label": "创建 Btrfs 存储池", "status": "pending"},
+    {"id": "mount-pool", "label": "挂载数据池", "status": "pending"},
+    {"id": "register-pool", "label": "写入系统记录", "status": "pending"}
+  ]
+}
+JSON
+fi
+
+cat <<MSG
+Lingyue OS storage pool scaffold
+Plan: $plan
+Pool: $pool
+Mode: $mode
+Devices: $devices_csv
+Mountpoint: $mountpoint
+Manifest: ${manifest:-not provided}
+Run file: ${run_file:-not provided}
+
+Validated target block devices and manifest inputs.
+The destructive storage creator is still guarded in this alpha build.
+No filesystem, mount entry, or pool metadata was written.
+MSG
